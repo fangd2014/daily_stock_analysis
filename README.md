@@ -81,6 +81,8 @@ python -m src.quant.cli --config configs/quant/quant_research_tdx.json fetch
 
 该配置会并发探测 PyTDX 自带行情节点，按延迟排序，按每页最多 800 根 K 线向历史分页，并在节点中断时从同一偏移量续传。数据按月写入 Parquet；活动区间采用三天重叠增量刷新。写入前会检查重复时间戳、OHLC 合法性、每个交易日 K 线完整度，并用 Tushare 日线校准成交量/成交额单位和交叉核对收盘价。质量报告位于缓存目录的 `quality.json`，任何检查失败都会禁止该 PyTDX 缓存进入优化。
 
+公开 PyTDX 节点的分钟历史保留期有限且可能变化，示例从当前节点可覆盖的 `2024-07-02` 开始，并使用 12 个月训练、3 个月滚动验证和 2026 年第二季度独立盲测。更早的分钟历史需由 Tushare 或本地授权数据补齐，不会用缺失区间伪造长期回测。
+
 `data.fallback_source` 可设为 `tushare`、`local` 或 `none`。降级不是静默的，实际使用的数据源和主源错误会写入同目录的 `active_source.json`。PyTDX 使用原始 TCP 协议；若本机网络或代理不允许访问行情节点，应开放相应出站连接，或显式使用上述降级源。Tushare 交叉校验仍需在 `.env` 配置 `TUSHARE_TOKEN`。
 
 #### 筹码双峰高抛低吸策略
@@ -241,6 +243,7 @@ QUANT_PAPER_PYTHON="$(command -v python3)" ./scripts/install_quant_paper_cron.sh
 | `BOCHA_API_KEYS` | [博查搜索](https://open.bocha.cn/) Web Search API（中文搜索优化，支持AI摘要，多个key用逗号分隔） | 可选 |
 | `BRAVE_API_KEYS` | [Brave Search](https://brave.com/search/api/) API（隐私优先，美股优化，多个key用逗号分隔） | 可选 |
 | `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/weborder/#/login?reg=834638 ) Token | 可选 |
+| `TUSHARE_API_URL` | Tushare Pro API 地址，默认 `http://api.tushare.pro` | 可选 |
 | `WECHAT_MSG_TYPE` | 企微消息类型，默认 markdown，支持配置 text 类型，发送纯 markdown 文本 | 可选 |
 
 #### 3. 启用 Actions

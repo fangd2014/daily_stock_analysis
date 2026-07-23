@@ -3,9 +3,11 @@
 import pandas as pd
 import pytest
 
+from src.quant.config import DataConfig, QuantConfig
 from src.quant.data import (
     QuantDataBundle,
     QuantDataError,
+    TushareMinuteDataProvider,
     ensure_bundle_coverage,
     normalize_dividends,
     normalize_minute_bars,
@@ -65,3 +67,31 @@ def test_coverage_check_rejects_partial_cache_before_optimization():
     bundle = QuantDataBundle(bars, pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
     with pytest.raises(QuantDataError, match="ends at"):
         ensure_bundle_coverage(bundle, "2020-07-01", "2026-06-30")
+
+
+class DailyQuotaApi:
+    def __init__(self):
+        self.calls = 0
+
+    def stk_mins(self, **kwargs):
+        del kwargs
+        self.calls += 1
+        raise RuntimeError("接口频率超限(2次/天)")
+
+
+def test_tushare_daily_quota_exhaustion_fails_without_sleeping(tmp_path):
+    config = QuantConfig(
+        symbol="688008.SH",
+        name="Test",
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        output_dir=str(tmp_path / "reports"),
+        data=DataConfig(cache_dir=str(tmp_path)),
+    )
+    api = DailyQuotaApi()
+    provider = TushareMinuteDataProvider(config, api=api)
+
+    with pytest.raises(QuantDataError, match="quota is exhausted"):
+        provider._call("stk_mins", ts_code="688008.SH")
+
+    assert api.calls == 1

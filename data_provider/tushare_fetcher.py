@@ -31,6 +31,7 @@ from tenacity import (
 
 from .base import BaseFetcher, DataFetchError, RateLimitError, STANDARD_COLUMNS
 from src.config import get_config
+from src.tushare_client import create_tushare_pro_api
 import os
 
 logger = logging.getLogger(__name__)
@@ -99,13 +100,8 @@ class TushareFetcher(BaseFetcher):
             return
         
         try:
-            import tushare as ts
-            
-            # 设置 Token
-            ts.set_token(config.tushare_token)
-            
             # 获取 API 实例
-            self._api = ts.pro_api()
+            self._api = create_tushare_pro_api(config.tushare_token)
             
             logger.info("Tushare API 初始化成功")
             

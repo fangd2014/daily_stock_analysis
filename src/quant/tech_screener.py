@@ -13,6 +13,7 @@ from typing import Any, Optional, Protocol
 import pandas as pd
 
 from src.config import setup_env
+from src.tushare_client import create_tushare_pro_api
 
 from .config import StrategyConfig
 from .strategy import _select_double_peak
@@ -70,12 +71,10 @@ class TushareDailyDataProvider:
 
     def __init__(self) -> None:
         setup_env()
-        import tushare as ts
-
         token = os.getenv("TUSHARE_TOKEN", "").strip()
         if not token or token.startswith("your_"):
             raise ValueError("TUSHARE_TOKEN is required for technology screening")
-        self.api = ts.pro_api(token)
+        self.api = create_tushare_pro_api(token)
 
     def load(self, symbol: str, start_date: str, end_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
         daily = self.api.daily(ts_code=symbol, start_date=start_date, end_date=end_date)

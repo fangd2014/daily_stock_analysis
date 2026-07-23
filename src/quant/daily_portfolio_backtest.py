@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 from src.config import setup_env
+from src.tushare_client import create_tushare_pro_api
 
 from .backtest import BacktestEngine, BacktestResult
 from .config import load_quant_config
@@ -172,12 +173,10 @@ def run_backtest(
     if any(not item.get("buy_ready", False) for item in selected):
         raise ValueError("Every initial constituent must satisfy the selection-day buy condition")
     setup_env()
-    import tushare as ts
-
     token = os.getenv("TUSHARE_TOKEN", "").strip()
     if not token or token.startswith("your_"):
         raise ValueError("TUSHARE_TOKEN is required for the daily portfolio backtest")
-    api = ts.pro_api(token)
+    api = create_tushare_pro_api(token)
     template = load_quant_config(template_config_path)
     warmup_start = (pd.Timestamp(start_date) - pd.Timedelta(days=150)).strftime("%Y-%m-%d")
     capital = [333_333.0, 333_333.0, 333_334.0]

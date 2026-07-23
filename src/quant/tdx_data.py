@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import setup_env
+from src.tushare_client import create_tushare_pro_api
 
 from .config import QuantConfig
 from .data import (
@@ -498,12 +499,10 @@ class TushareTdxMetadataProvider:
         setup_env()
         import os
 
-        import tushare as ts
-
         token = os.getenv("TUSHARE_TOKEN", "").strip()
         if not token or token.startswith("your_"):
             raise QuantDataError("TUSHARE_TOKEN is required for PyTDX metadata and cross-validation")
-        self.api = ts.pro_api(token)
+        self.api = create_tushare_pro_api(token)
         return self.api
 
     def _call(self, endpoint: str, **kwargs: Any) -> pd.DataFrame:

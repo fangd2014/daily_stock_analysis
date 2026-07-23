@@ -7,7 +7,7 @@ volume-profile peaks, add and iteratively optimize other factors, and include ex
 
 ## Desired outcome
 
-- Research target: stable 10% monthly return.
+- Research target: at least 36 out-of-sample months with median monthly return of at least 10%.
 - Hard drawdown ceiling: 10% maximum drawdown.
 - Persistent model-guided research loop that continues until a validator passes or evidence shows the target is not
   supportable under honest out-of-sample testing.
@@ -43,9 +43,7 @@ keeping losses bounded, without requiring the user to choose factors manually.
 
 ## Unknowns and open questions
 
-- Statistical definition of "stable 10% monthly return" and the minimum evaluation horizon.
 - Whether leverage, derivatives, short selling, or only long A-shares are permitted.
-- Whether the 10% requirement is arithmetic mean, geometric mean, median, or a per-month floor.
 - Minimum capacity and turnover constraints beyond the existing simulated 1,000,000 CNY account.
 
 ## Decision-boundary unknowns

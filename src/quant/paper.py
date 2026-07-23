@@ -21,6 +21,7 @@ import pandas as pd
 from data_provider.akshare_fetcher import AkshareFetcher
 from data_provider.realtime_types import UnifiedRealtimeQuote
 from src.config import setup_env
+from src.tushare_client import create_tushare_pro_api
 
 from .broker import ExecutionBroker, Order
 from .config import QuantConfig, load_quant_config
@@ -270,10 +271,8 @@ class PaperTradingService:
                 logger.warning("Daily regime history unavailable because TUSHARE_TOKEN is not configured")
             return
         try:
-            import tushare as ts
-
             start = today - pd.Timedelta(days=120)
-            frame = ts.pro_api(token).daily(
+            frame = create_tushare_pro_api(token).daily(
                 ts_code=self.quant_config.symbol,
                 start_date=start.strftime("%Y%m%d"),
                 end_date=today.strftime("%Y%m%d"),

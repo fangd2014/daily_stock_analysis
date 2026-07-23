@@ -11,6 +11,7 @@ from typing import Iterable, Optional, Protocol
 import pandas as pd
 
 from src.config import setup_env
+from src.tushare_client import create_tushare_pro_api
 
 from .config import QuantConfig
 
@@ -138,12 +139,10 @@ class TushareMinuteDataProvider:
         setup_env()
         import os
 
-        import tushare as ts
-
         token = os.getenv("TUSHARE_TOKEN", "").strip()
         if not token or token.startswith("your_"):
             raise QuantDataError("TUSHARE_TOKEN is required for minute data")
-        self._api = ts.pro_api(token)
+        self._api = create_tushare_pro_api(token)
         return self._api
 
     def _call(self, endpoint: str, **kwargs: object) -> pd.DataFrame:
@@ -155,10 +154,11 @@ class TushareMinuteDataProvider:
                 if attempt == 4:
                     raise
                 message = str(exc)
-                if "1次/小时" in message:
+                if "次/天" in message or "次/小时" in message:
                     raise QuantDataError(
-                        "The current Tushare account permits only one stk_mins request per hour. "
-                        "Cached partitions are safe; retry later, upgrade the data permission, or use a local file."
+                        f"The Tushare {endpoint} hourly or daily request quota is exhausted. "
+                        "Cached partitions are safe; retry after the quota resets, upgrade the data permission, "
+                        "or use a local file."
                     ) from exc
                 delay = 61.0 if "频率超限" in message else min(2 ** (attempt + 1), 30)
                 logger.warning("Tushare %s request failed; retrying in %.0fs: %s", endpoint, delay, message)
