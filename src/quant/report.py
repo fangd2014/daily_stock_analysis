@@ -166,6 +166,8 @@ def write_holdout_report(
         f"- Annual return: {percentage(strategy.metrics['annual_return'])}",
         f"- Maximum drawdown: {percentage(strategy.metrics['max_drawdown'])}",
         f"- Calmar ratio: {strategy.metrics['calmar']:.2f}",
+        f"- Out-of-sample months: {strategy.metrics['out_of_sample_months']}",
+        f"- Median monthly return: {percentage(strategy.metrics['median_monthly_return'])}",
         f"- Mean monthly return: {percentage(strategy.metrics['mean_monthly_return'])}",
         f"- T+0 pair PnL: CNY {strategy.metrics['t0_pair_pnl']:,.2f}",
         f"- Incremental ending value vs static base: CNY {summary['t0_incremental_end_value']:,.2f}",
@@ -174,6 +176,12 @@ def write_holdout_report(
         "",
     ]
     labels = {
+        "out_of_sample_months": (
+            f"Out-of-sample months >= {config.acceptance.min_out_of_sample_months}"
+        ),
+        "median_monthly_return": (
+            f"Median monthly return >= {percentage(config.acceptance.median_monthly_return_min)}"
+        ),
         "annual_return": f"Annual return >= {percentage(config.acceptance.annual_return_min)}",
         "max_drawdown": f"Maximum drawdown <= {percentage(config.acceptance.max_drawdown_max)}",
         "calmar": f"Calmar >= {config.acceptance.calmar_min:.2f}",

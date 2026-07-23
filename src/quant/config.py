@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List
 
+import pandas as pd
+
 
 @dataclass(frozen=True)
 class DataConfig:
@@ -28,6 +30,7 @@ class DataConfig:
     tdx_min_bars_per_day_ratio: float = 0.80
     tdx_close_tolerance_bps: float = 20.0
     tdx_require_cross_validation: bool = True
+    tdx_history_start_date: str = ""
 
 
 @dataclass(frozen=True)
@@ -103,6 +106,8 @@ class AcceptanceConfig:
     max_drawdown_max: float = 0.25
     calmar_min: float = 2.0
     mean_monthly_return_min: float = 0.025
+    median_monthly_return_min: float = -1.0
+    min_out_of_sample_months: int = 0
 
 
 @dataclass(frozen=True)
@@ -154,7 +159,7 @@ def load_quant_config(path: str | Path) -> QuantConfig:
 
 
 def _validate_config(config: QuantConfig) -> None:
-    if config.data.source not in {"tushare", "local", "pytdx"}:
+    if config.data.source not in {"tushare", "local", "pytdx", "hybrid"}:
         raise ValueError(f"Unsupported data source: {config.data.source}")
     if config.data.source == "local" and not config.data.local_path:
         raise ValueError("data.local_path is required when data.source is local")
@@ -180,6 +185,12 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError("data.tdx_min_bars_per_day_ratio must be in (0, 1]")
     if config.data.tdx_close_tolerance_bps <= 0:
         raise ValueError("data.tdx_close_tolerance_bps must be positive")
+    if config.data.source == "hybrid":
+        if not config.data.tdx_history_start_date:
+            raise ValueError("data.tdx_history_start_date is required when data.source is hybrid")
+        cutoff = pd.Timestamp(config.data.tdx_history_start_date)
+        if not pd.Timestamp(config.start_date) < cutoff <= pd.Timestamp(config.end_date):
+            raise ValueError("data.tdx_history_start_date must be inside the configured date range")
     if config.strategy.strategy_type not in {"vwap_t0", "chip_double_peak"}:
         raise ValueError(f"Unsupported strategy type: {config.strategy.strategy_type}")
     if not 0 < config.portfolio.base_ratio < 1:
@@ -213,3 +224,16 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError("chip positions must satisfy 0 < low < exit < high < 1")
     if config.strategy.chip_breakout_buffer_pct <= 0:
         raise ValueError("strategy.chip_breakout_buffer_pct must be positive")
+    if config.acceptance.min_out_of_sample_months < 0:
+        raise ValueError("acceptance.min_out_of_sample_months must not be negative")
+    if config.acceptance.median_monthly_return_min < -1:
+        raise ValueError("acceptance.median_monthly_return_min must be at least -1")
+    holdout_start = pd.Timestamp(config.optimization.holdout_start)
+    holdout_end = pd.Timestamp(config.optimization.holdout_end)
+    if holdout_end < holdout_start:
+        raise ValueError("optimization.holdout_end must not precede holdout_start")
+    configured_oos_months = len(pd.period_range(holdout_start, holdout_end, freq="M"))
+    if configured_oos_months < config.acceptance.min_out_of_sample_months:
+        raise ValueError(
+            "Configured holdout has fewer months than acceptance.min_out_of_sample_months"
+        )

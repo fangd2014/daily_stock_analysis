@@ -15,6 +15,7 @@ from src.quant.config import DataConfig, QuantConfig, load_quant_config
 from src.quant.data import QuantDataBundle, QuantDataError
 from src.quant.tdx_data import (
     FailoverQuantDataProvider,
+    HybridQuantDataProvider,
     TdxBarPager,
     TdxCalibration,
     TdxEndpoint,
@@ -381,3 +382,81 @@ def test_config_accepts_pytdx_and_rejects_oversized_pages(tmp_path: Path):
     config_path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="between 1 and 800"):
         load_quant_config(config_path)
+
+
+class BundleProvider:
+    def __init__(self, bundle: QuantDataBundle):
+        self.bundle = bundle
+        self.fetch_calls = 0
+
+    def fetch(self, force: bool = False) -> QuantDataBundle:
+        del force
+        self.fetch_calls += 1
+        return self.bundle
+
+    def load(self) -> QuantDataBundle:
+        return self.bundle
+
+
+def make_single_bar_bundle(timestamp: str) -> QuantDataBundle:
+    bars = pd.DataFrame(
+        {
+            "datetime": [pd.Timestamp(timestamp)],
+            "symbol": ["688008.SH"],
+            "open": [10.0],
+            "high": [10.0],
+            "low": [10.0],
+            "close": [10.0],
+            "volume": [100.0],
+            "amount": [1_000.0],
+        }
+    )
+    return QuantDataBundle(bars, pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+
+
+def make_hybrid_config(tmp_path: Path) -> QuantConfig:
+    data = replace(
+        DataConfig(),
+        source="hybrid",
+        fallback_source="none",
+        cache_dir=str(tmp_path),
+        tdx_history_start_date="2026-03-01",
+    )
+    return QuantConfig(
+        symbol="688008.SH",
+        name="Hybrid Test",
+        start_date="2026-01-01",
+        end_date="2026-03-31",
+        output_dir=str(tmp_path / "reports"),
+        data=data,
+    )
+
+
+def test_hybrid_provider_rejects_incomplete_historical_months(tmp_path: Path):
+    historical = BundleProvider(make_single_bar_bundle("2026-01-05 09:35"))
+    recent = BundleProvider(make_single_bar_bundle("2026-03-02 09:35"))
+    provider = HybridQuantDataProvider(make_hybrid_config(tmp_path), historical, recent)
+
+    with pytest.raises(QuantDataError, match=r"2 month\(s\) missing"):
+        provider.fetch()
+
+    assert historical.fetch_calls == 1
+    assert recent.fetch_calls == 0
+    status = json.loads(provider.status_path.read_text(encoding="utf-8"))
+    assert status["ready_for_research"] is False
+
+
+def test_hybrid_provider_merges_history_and_recent_data(tmp_path: Path):
+    historical = BundleProvider(make_single_bar_bundle("2026-02-27 15:00"))
+    recent = BundleProvider(make_single_bar_bundle("2026-03-02 09:35"))
+    provider = HybridQuantDataProvider(make_hybrid_config(tmp_path), historical, recent)
+    provider.cache_root.mkdir(parents=True, exist_ok=True)
+    for month in ("2026-01", "2026-02"):
+        (provider.cache_root / f"bars_{month}.parquet").touch()
+
+    bundle = provider.fetch()
+
+    assert len(bundle.bars) == 2
+    assert bundle.bars["datetime"].is_monotonic_increasing
+    status = json.loads(provider.status_path.read_text(encoding="utf-8"))
+    assert status["ready_for_research"] is True

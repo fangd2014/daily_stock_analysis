@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
@@ -779,3 +779,129 @@ class FailoverQuantDataProvider:
         except Exception as exc:
             self._write_status(self.fallback_name, str(exc))
             return self.fallback.load()
+
+
+class HybridQuantDataProvider:
+    """Combine Tushare historical partitions with recent PyTDX bars."""
+
+    def __init__(
+        self,
+        config: QuantConfig,
+        historical_provider: Any | None = None,
+        recent_provider: Any | None = None,
+    ):
+        from .data import TushareMinuteDataProvider
+
+        self.config = config
+        self.cutoff = pd.Timestamp(config.data.tdx_history_start_date).normalize()
+        history_end = self.cutoff - pd.Timedelta(days=1)
+        history_data = replace(config.data, source="tushare", fallback_source="none")
+        recent_data = replace(config.data, source="pytdx", fallback_source="none")
+        self.history_config = replace(config, end_date=str(history_end.date()), data=history_data)
+        self.recent_config = replace(config, start_date=str(self.cutoff.date()), data=recent_data)
+        self.historical_provider = historical_provider or TushareMinuteDataProvider(self.history_config)
+        self.recent_provider = recent_provider or TdxQuantDataProvider(self.recent_config)
+        self.cache_root = (
+            Path(config.data.cache_dir)
+            / config.symbol.replace(".", "_")
+            / config.data.frequency
+        )
+        self.status_path = self.cache_root / "hybrid_status.json"
+
+    def _required_history_months(self) -> list[pd.Period]:
+        return list(
+            pd.period_range(
+                start=pd.Timestamp(self.history_config.start_date),
+                end=pd.Timestamp(self.history_config.end_date),
+                freq="M",
+            )
+        )
+
+    def _missing_history_months(self) -> list[str]:
+        return [
+            str(period)
+            for period in self._required_history_months()
+            if not (self.cache_root / f"bars_{period}.parquet").exists()
+        ]
+
+    def _write_status(self, missing: list[str], recent_ready: bool, error: str = "") -> None:
+        self.status_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "symbol": self.config.symbol,
+            "historical_source": "tushare",
+            "historical_start": self.history_config.start_date,
+            "historical_end": self.history_config.end_date,
+            "recent_source": "pytdx",
+            "recent_start": self.recent_config.start_date,
+            "recent_end": self.recent_config.end_date,
+            "missing_historical_months": missing,
+            "historical_complete": not missing,
+            "recent_ready": recent_ready,
+            "ready_for_research": not missing and recent_ready,
+            "error": error,
+            "updated_at": pd.Timestamp.now(tz="Asia/Shanghai").isoformat(),
+        }
+        temporary = self.status_path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(self.status_path)
+
+    @staticmethod
+    def _merge_frames(first: pd.DataFrame, second: pd.DataFrame, key: str) -> pd.DataFrame:
+        frames = [frame for frame in (first, second) if frame is not None and not frame.empty]
+        if not frames:
+            return first.iloc[0:0].copy() if first is not None else pd.DataFrame()
+        combined = pd.concat(frames, ignore_index=True)
+        return combined.drop_duplicates(key, keep="last").sort_values(key).reset_index(drop=True)
+
+    def _merge(self, historical: QuantDataBundle, recent: QuantDataBundle) -> QuantDataBundle:
+        bars = self._merge_frames(historical.bars, recent.bars, "datetime")
+        bars = normalize_minute_bars(bars, self.config.symbol)
+        return QuantDataBundle(
+            bars=bars,
+            limits=normalize_limits(self._merge_frames(historical.limits, recent.limits, "trade_date")),
+            adjustments=normalize_adjustments(
+                self._merge_frames(historical.adjustments, recent.adjustments, "trade_date")
+            ),
+            dividends=normalize_dividends(
+                self._merge_frames(historical.dividends, recent.dividends, "ex_date")
+            ),
+        )
+
+    def _require_historical_coverage(self) -> list[str]:
+        missing = self._missing_history_months()
+        if missing:
+            self._write_status(missing, recent_ready=False, error="historical_backfill_incomplete")
+            preview = ", ".join(missing[:6])
+            raise QuantDataError(
+                f"Hybrid historical backfill is incomplete: {len(missing)} month(s) missing ({preview}); "
+                "rerun fetch after the Tushare quota resets"
+            )
+        return missing
+
+    def fetch(self, force: bool = False) -> QuantDataBundle:
+        try:
+            historical = self.historical_provider.fetch(force=force)
+        except Exception as exc:
+            self._write_status(self._missing_history_months(), recent_ready=False, error=str(exc))
+            raise
+        self._require_historical_coverage()
+        try:
+            recent = self.recent_provider.fetch(force=force)
+        except Exception as exc:
+            self._write_status([], recent_ready=False, error=str(exc))
+            raise
+        result = self._merge(historical, recent)
+        self._write_status([], recent_ready=True)
+        return result
+
+    def load(self) -> QuantDataBundle:
+        self._require_historical_coverage()
+        historical = self.historical_provider.load()
+        try:
+            recent = self.recent_provider.load()
+        except Exception as exc:
+            self._write_status([], recent_ready=False, error=str(exc))
+            raise
+        result = self._merge(historical, recent)
+        self._write_status([], recent_ready=True)
+        return result

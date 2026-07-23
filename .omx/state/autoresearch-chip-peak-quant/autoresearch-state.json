@@ -1,0 +1,10 @@
+{
+  "active": true,
+  "validation_mode": "mission-validator-script",
+  "completion_artifact_path": ".omx/specs/autoresearch-chip-peak-quant/result.json",
+  "mission_validator_command": "python -m src.quant.validate_research --config configs/quant/quant_research_36m.json --output .omx/specs/autoresearch-chip-peak-quant/result.json",
+  "output_artifact_path": "reports/quant/chip_peak_36m_oos/report.md",
+  "status": "running",
+  "phase": "historical_data_backfill",
+  "updated_at": "2026-07-23T21:51:52+08:00"
+}

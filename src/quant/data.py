@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -228,9 +229,20 @@ class TushareMinuteDataProvider:
             "adjustments.parquet": ("adj_factor", normalize_adjustments),
             "dividends.parquet": ("dividend", normalize_dividends),
         }
+        manifest_path = self.cache_root / "metadata_request.json"
+        request_spec = {
+            "symbol": self.config.symbol,
+            "start_date": self.config.start_date,
+            "end_date": self.config.end_date,
+        }
+        try:
+            cached_request = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            cached_request = {}
+        refresh_metadata = force or cached_request != request_spec
         for filename, (endpoint, normalizer) in endpoints.items():
             cache_path = self.cache_root / filename
-            if cache_path.exists() and not force:
+            if cache_path.exists() and not refresh_metadata:
                 continue
             try:
                 call_args = {"ts_code": self.config.symbol} if endpoint == "dividend" else date_args
@@ -248,6 +260,9 @@ class TushareMinuteDataProvider:
                 else:
                     raise QuantDataError(f"Unable to fetch {endpoint}: {exc}") from exc
             time.sleep(min(self.config.data.request_pause_seconds, 0.2))
+        temporary = manifest_path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(request_spec, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(manifest_path)
 
     def load(self) -> QuantDataBundle:
         """Load cached data without making network requests."""
@@ -321,6 +336,10 @@ def create_data_provider(config: QuantConfig) -> QuantDataProvider:
             raise QuantDataError(f"Unsupported quant fallback source: {config.data.fallback_source}")
         status_path = primary.cache_root / "active_source.json"
         return FailoverQuantDataProvider(primary, fallback, status_path, config.data.fallback_source)
+    if config.data.source == "hybrid":
+        from .tdx_data import HybridQuantDataProvider
+
+        return HybridQuantDataProvider(config)
     raise QuantDataError(f"Unsupported quant data source: {config.data.source}")
 
 

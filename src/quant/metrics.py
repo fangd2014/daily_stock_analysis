@@ -17,6 +17,14 @@ def daily_equity(equity_curve: pd.DataFrame) -> pd.Series:
     return frame.set_index("datetime")["equity"].resample("1D").last().dropna()
 
 
+def _with_initial_equity(daily: pd.Series, initial_equity: float | None) -> pd.Series:
+    if initial_equity is None or daily.empty:
+        return daily
+    first_month = daily.index[0].to_period("M")
+    opening_index = first_month.start_time - pd.Timedelta(days=1)
+    return pd.concat([pd.Series([float(initial_equity)], index=[opening_index]), daily])
+
+
 def calculate_metrics(
     equity_curve: pd.DataFrame,
     trades: pd.DataFrame | None = None,
@@ -25,9 +33,7 @@ def calculate_metrics(
 ) -> Dict[str, Any]:
     """Calculate account-level return, risk, and trading metrics."""
     daily = daily_equity(equity_curve)
-    if initial_equity is not None and len(daily):
-        opening_index = daily.index[0].normalize() - pd.Timedelta(days=1)
-        daily = pd.concat([pd.Series([float(initial_equity)], index=[opening_index]), daily])
+    daily = _with_initial_equity(daily, initial_equity)
     if len(daily) < 2 or daily.iloc[0] <= 0:
         return {
             "start_equity": float(daily.iloc[0]) if len(daily) else 0.0,
@@ -40,6 +46,7 @@ def calculate_metrics(
             "mean_monthly_return": 0.0,
             "median_monthly_return": 0.0,
             "positive_month_ratio": 0.0,
+            "out_of_sample_months": 0,
             "trade_count": 0,
             "pair_count": 0,
             "win_rate": 0.0,
@@ -88,6 +95,7 @@ def calculate_metrics(
         "mean_monthly_return": float(monthly.mean()) if len(monthly) else 0.0,
         "median_monthly_return": float(monthly.median()) if len(monthly) else 0.0,
         "positive_month_ratio": float((monthly > 0).mean()) if len(monthly) else 0.0,
+        "out_of_sample_months": int(len(monthly)),
         "trade_count": int(trade_count),
         "pair_count": int(pair_count),
         "win_rate": win_rate,
@@ -99,9 +107,7 @@ def calculate_metrics(
 def monthly_returns(equity_curve: pd.DataFrame, initial_equity: float | None = None) -> pd.DataFrame:
     """Return a tabular monthly return series."""
     daily = daily_equity(equity_curve)
-    if initial_equity is not None and len(daily):
-        opening_index = daily.index[0].normalize() - pd.Timedelta(days=1)
-        daily = pd.concat([pd.Series([float(initial_equity)], index=[opening_index]), daily])
+    daily = _with_initial_equity(daily, initial_equity)
     values = daily.resample("ME").last().pct_change().dropna()
     return pd.DataFrame({"month": values.index.strftime("%Y-%m"), "return": values.values})
 
@@ -109,6 +115,8 @@ def monthly_returns(equity_curve: pd.DataFrame, initial_equity: float | None = N
 def acceptance_results(metrics: Dict[str, Any], acceptance: Any) -> Dict[str, bool]:
     """Evaluate the agreed out-of-sample acceptance thresholds."""
     return {
+        "out_of_sample_months": metrics["out_of_sample_months"] >= acceptance.min_out_of_sample_months,
+        "median_monthly_return": metrics["median_monthly_return"] >= acceptance.median_monthly_return_min,
         "annual_return": metrics["annual_return"] >= acceptance.annual_return_min,
         "max_drawdown": metrics["max_drawdown"] <= acceptance.max_drawdown_max,
         "calmar": metrics["calmar"] >= acceptance.calmar_min,

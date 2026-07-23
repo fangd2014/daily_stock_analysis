@@ -85,6 +85,22 @@ python -m src.quant.cli --config configs/quant/quant_research_tdx.json fetch
 
 `data.fallback_source` 可设为 `tushare`、`local` 或 `none`。降级不是静默的，实际使用的数据源和主源错误会写入同目录的 `active_source.json`。PyTDX 使用原始 TCP 协议；若本机网络或代理不允许访问行情节点，应开放相应出站连接，或显式使用上述降级源。Tushare 交叉校验仍需在 `.env` 配置 `TUSHARE_TOKEN`。
 
+36 个月严格样本外研究使用混合数据配置：
+
+```bash
+python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch
+```
+
+该配置用 Tushare 分区回填 `2021-07-01` 至 `2024-07-01`，用 PyTDX 提供此后的分钟行情。低频 Tushare 账户每次只回填一个 6 个月分块；未补齐月份会记录在 `hybrid_status.json` 并阻止优化，额度重置后重复执行即可续传。验收期固定为 `2023-07` 至 `2026-06` 共 36 个月，硬门槛为月收益中位数不低于 10%、账户最大回撤不高于 10%。未达到任一条件时报告必须为失败；该门槛不是收益保证。
+
+若账户的 `stk_mins` 权限为每小时一次，可安装幂等回填任务：
+
+```bash
+QUANT_BACKFILL_PYTHON="$(command -v python3)" ./scripts/install_quant_backfill_cron.sh
+```
+
+任务每小时第 17 分钟运行，每次最多请求一个分块；所有历史分区补齐后仍会保留覆盖检查，但不会重复请求已经缓存的 Tushare 分钟数据。
+
 #### 筹码双峰高抛低吸策略
 
 `configs/quant/688008_chip_double_peak.json` 是独立的筹码双峰策略示例。它只使用信号日前 60 个交易日的成交量价格分布，在两个主峰至少相距 8%、峰间谷值不高于较弱峰 70% 时确认双峰。股价位于两峰之间且进入区间下方 28% 时低吸，进入上方 28% 时高抛，回到 50% 中轴平仓。

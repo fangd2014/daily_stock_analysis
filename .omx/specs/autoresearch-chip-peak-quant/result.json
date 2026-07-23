@@ -1,0 +1,16 @@
+{
+  "status": "failed",
+  "passed": false,
+  "observed_out_of_sample_months": 0,
+  "required_out_of_sample_months": 36,
+  "median_monthly_return": 0.0,
+  "required_median_monthly_return": 0.1,
+  "max_drawdown": 1.0,
+  "maximum_allowed_drawdown": 0.1,
+  "missing_months": [],
+  "failures": [
+    "monthly_returns_missing",
+    "equity_missing"
+  ],
+  "summary": "Required holdout artifacts are missing."
+}
