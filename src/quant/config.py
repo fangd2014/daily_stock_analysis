@@ -11,12 +11,23 @@ from typing import Any, Dict, List
 @dataclass(frozen=True)
 class DataConfig:
     source: str = "tushare"
+    fallback_source: str = "tushare"
     frequency: str = "5min"
     cache_dir: str = "data/quant_cache"
     request_pause_seconds: float = 61.0
     minute_chunk_months: int = 6
     max_chunks_per_run: int = 0
     local_path: str = ""
+    tdx_endpoints: List[str] = field(default_factory=list)
+    tdx_connect_timeout_seconds: float = 2.0
+    tdx_health_ttl_seconds: int = 3600
+    tdx_probe_workers: int = 12
+    tdx_page_size: int = 800
+    tdx_max_pages: int = 500
+    tdx_min_complete_day_ratio: float = 0.95
+    tdx_min_bars_per_day_ratio: float = 0.80
+    tdx_close_tolerance_bps: float = 20.0
+    tdx_require_cross_validation: bool = True
 
 
 @dataclass(frozen=True)
@@ -143,12 +154,32 @@ def load_quant_config(path: str | Path) -> QuantConfig:
 
 
 def _validate_config(config: QuantConfig) -> None:
-    if config.data.source not in {"tushare", "local"}:
+    if config.data.source not in {"tushare", "local", "pytdx"}:
         raise ValueError(f"Unsupported data source: {config.data.source}")
     if config.data.source == "local" and not config.data.local_path:
         raise ValueError("data.local_path is required when data.source is local")
+    if config.data.fallback_source not in {"none", "tushare", "local"}:
+        raise ValueError(f"Unsupported fallback data source: {config.data.fallback_source}")
+    if config.data.source == "pytdx" and config.data.fallback_source == "local" and not config.data.local_path:
+        raise ValueError("data.local_path is required when data.fallback_source is local")
     if config.data.frequency not in {"1min", "5min", "15min", "30min", "60min"}:
         raise ValueError(f"Unsupported frequency: {config.data.frequency}")
+    if config.data.tdx_connect_timeout_seconds <= 0:
+        raise ValueError("data.tdx_connect_timeout_seconds must be positive")
+    if config.data.tdx_health_ttl_seconds < 0:
+        raise ValueError("data.tdx_health_ttl_seconds must not be negative")
+    if config.data.tdx_probe_workers <= 0:
+        raise ValueError("data.tdx_probe_workers must be positive")
+    if not 1 <= config.data.tdx_page_size <= 800:
+        raise ValueError("data.tdx_page_size must be between 1 and 800")
+    if config.data.tdx_max_pages <= 0:
+        raise ValueError("data.tdx_max_pages must be positive")
+    if not 0 < config.data.tdx_min_complete_day_ratio <= 1:
+        raise ValueError("data.tdx_min_complete_day_ratio must be in (0, 1]")
+    if not 0 < config.data.tdx_min_bars_per_day_ratio <= 1:
+        raise ValueError("data.tdx_min_bars_per_day_ratio must be in (0, 1]")
+    if config.data.tdx_close_tolerance_bps <= 0:
+        raise ValueError("data.tdx_close_tolerance_bps must be positive")
     if config.strategy.strategy_type not in {"vwap_t0", "chip_double_peak"}:
         raise ValueError(f"Unsupported strategy type: {config.strategy.strategy_type}")
     if not 0 < config.portfolio.base_ratio < 1:

@@ -73,6 +73,16 @@ python -m src.quant.cli --config configs/quant/688008_t0.json backtest --holdout
 若 Tushare 分钟接口频率不足，可将 CSV/Parquet 路径填入配置的 `data.local_path`，并把 `data.source` 改为 `local`；文件至少需包含时间、OHLC 和成交量列。
 示例配置默认每次只下载一个 6 个月分块，以适配低频账户并支持断点续跑；可按账户权限调整 `max_chunks_per_run`，设为 `0` 表示单次拉取全部缺失分块。
 
+也可使用 PyTDX 作为分钟行情主源：
+
+```bash
+python -m src.quant.cli --config configs/quant/quant_research_tdx.json fetch
+```
+
+该配置会并发探测 PyTDX 自带行情节点，按延迟排序，按每页最多 800 根 K 线向历史分页，并在节点中断时从同一偏移量续传。数据按月写入 Parquet；活动区间采用三天重叠增量刷新。写入前会检查重复时间戳、OHLC 合法性、每个交易日 K 线完整度，并用 Tushare 日线校准成交量/成交额单位和交叉核对收盘价。质量报告位于缓存目录的 `quality.json`，任何检查失败都会禁止该 PyTDX 缓存进入优化。
+
+`data.fallback_source` 可设为 `tushare`、`local` 或 `none`。降级不是静默的，实际使用的数据源和主源错误会写入同目录的 `active_source.json`。PyTDX 使用原始 TCP 协议；若本机网络或代理不允许访问行情节点，应开放相应出站连接，或显式使用上述降级源。Tushare 交叉校验仍需在 `.env` 配置 `TUSHARE_TOKEN`。
+
 #### 筹码双峰高抛低吸策略
 
 `configs/quant/688008_chip_double_peak.json` 是独立的筹码双峰策略示例。它只使用信号日前 60 个交易日的成交量价格分布，在两个主峰至少相距 8%、峰间谷值不高于较弱峰 70% 时确认双峰。股价位于两峰之间且进入区间下方 28% 时低吸，进入上方 28% 时高抛，回到 50% 中轴平仓。
@@ -92,7 +102,7 @@ QUANT_PAPER_CONFIG=configs/quant/688008_chip_double_peak_paper.json \
   QUANT_PAPER_PYTHON="$(command -v python3)" ./scripts/install_quant_paper_cron.sh
 ```
 
-示例采用 30% 底仓，每组交易使用底仓的 30%（约账户权益的 9%），每日最多一组；单次最长持有 24 根 5 分钟 K 线并于收盘前强制恢复底仓。研究验收目标设为年化收益 10%、最大回撤 10%、Calmar 1.2；这是模拟盘筛选门槛而非收益或回撤保证。建议至少运行 6 个月、覆盖 100 组配对交易后再评估参数。
+示例采用 30% 底仓，每组交易使用底仓的 30%（约账户权益的 9%），每日最多一组；单次最长持有 24 根 5 分钟 K 线并于收盘前强制恢复底仓。普通示例的研究验收目标设为年化收益 10%、最大回撤 10%、Calmar 1.2；`quant_research_tdx.json` 另行保留月均 10%、最大回撤 10% 的高门槛，只能由无未来数据的滚动验证与独立盲测判定。所有目标均是模拟研究门槛，不是收益或回撤保证。建议至少运行 6 个月、覆盖 100 组配对交易后再评估参数。
 
 #### 科技龙头双峰组合
 

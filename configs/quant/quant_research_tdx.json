@@ -1,0 +1,77 @@
+{
+  "symbol": "688008.SH",
+  "name": "Chip-Peak Quant Research - PyTDX",
+  "start_date": "2020-07-01",
+  "end_date": "2026-07-23",
+  "output_dir": "reports/quant/chip_peak_tdx",
+  "data": {
+    "source": "pytdx",
+    "fallback_source": "tushare",
+    "frequency": "5min",
+    "cache_dir": "data/quant_cache",
+    "tdx_endpoints": [],
+    "tdx_connect_timeout_seconds": 2.0,
+    "tdx_health_ttl_seconds": 3600,
+    "tdx_probe_workers": 12,
+    "tdx_page_size": 800,
+    "tdx_max_pages": 500,
+    "tdx_min_complete_day_ratio": 0.95,
+    "tdx_min_bars_per_day_ratio": 0.8,
+    "tdx_close_tolerance_bps": 20,
+    "tdx_require_cross_validation": true,
+    "request_pause_seconds": 61,
+    "minute_chunk_months": 6,
+    "max_chunks_per_run": 1
+  },
+  "portfolio": {
+    "initial_cash": 1000000,
+    "base_ratio": 0.3,
+    "lot_size": 100,
+    "max_volume_participation": 0.03
+  },
+  "costs": {
+    "commission_rate": 0.00025,
+    "minimum_commission": 5,
+    "stamp_tax_rate": 0.0005,
+    "transfer_fee_rate": 0.00001,
+    "slippage_bps": 2
+  },
+  "strategy": {
+    "strategy_type": "chip_double_peak",
+    "position_fraction": 0.3,
+    "stop_loss_pct": 0.012,
+    "max_holding_bars": 24,
+    "max_pairs_per_day": 1,
+    "no_entry_before": "09:45",
+    "no_entry_after": "14:20",
+    "force_exit_at": "14:50",
+    "daily_loss_limit": 0.004,
+    "daily_trend_limit": 0.06,
+    "daily_volatility_limit": 0.04,
+    "account_drawdown_limit": 0.1,
+    "chip_lookback_days": 60,
+    "chip_min_history_days": 20,
+    "chip_bins": 48,
+    "chip_min_peak_separation_pct": 0.08,
+    "chip_min_peak_height_ratio": 0.45,
+    "chip_max_valley_ratio": 0.7,
+    "chip_low_entry_position": 0.28,
+    "chip_high_entry_position": 0.72,
+    "chip_exit_position": 0.5,
+    "chip_breakout_buffer_pct": 0.01
+  },
+  "optimization": {
+    "train_months": 24,
+    "validation_months": 6,
+    "step_months": 6,
+    "holdout_start": "2025-07-01",
+    "holdout_end": "2026-06-30",
+    "min_trades_per_year": 24
+  },
+  "acceptance": {
+    "annual_return_min": 2.1384,
+    "max_drawdown_max": 0.1,
+    "calmar_min": 2.0,
+    "mean_monthly_return_min": 0.1
+  }
+}

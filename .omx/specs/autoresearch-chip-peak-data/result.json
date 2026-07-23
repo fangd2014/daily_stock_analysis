@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "passed": true,
+  "summary": "PyTDX data foundation passed the complete deterministic quant test suite.",
+  "validator_command": "python -m pytest tests/test_quant_*.py -q",
+  "tests_passed": 52,
+  "tests_failed": 0,
+  "validated_at": "2026-07-23T21:11:26+08:00"
+}

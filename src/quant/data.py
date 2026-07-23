@@ -6,7 +6,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Protocol
 
 import pandas as pd
 
@@ -31,6 +31,16 @@ class QuantDataBundle:
     limits: pd.DataFrame
     adjustments: pd.DataFrame
     dividends: pd.DataFrame
+
+
+class QuantDataProvider(Protocol):
+    """Common interface for online and offline quantitative data sources."""
+
+    def fetch(self, force: bool = False) -> QuantDataBundle:
+        """Refresh data when needed and return a normalized bundle."""
+
+    def load(self) -> QuantDataBundle:
+        """Load a previously cached or local bundle without forced refresh."""
 
 
 def normalize_minute_bars(frame: pd.DataFrame, symbol: str) -> pd.DataFrame:
@@ -290,12 +300,27 @@ class LocalMinuteDataProvider:
         return load_local_bundle(self.config.data.local_path, self.config.symbol)
 
 
-def create_data_provider(config: QuantConfig) -> TushareMinuteDataProvider | LocalMinuteDataProvider:
+def create_data_provider(config: QuantConfig) -> QuantDataProvider:
     """Create the configured market-data provider."""
     if config.data.source == "tushare":
         return TushareMinuteDataProvider(config)
     if config.data.source == "local":
         return LocalMinuteDataProvider(config)
+    if config.data.source == "pytdx":
+        from .tdx_data import FailoverQuantDataProvider, TdxQuantDataProvider
+
+        primary = TdxQuantDataProvider(config)
+        if config.data.fallback_source == "none":
+            return primary
+        fallback: QuantDataProvider
+        if config.data.fallback_source == "tushare":
+            fallback = TushareMinuteDataProvider(config)
+        elif config.data.fallback_source == "local":
+            fallback = LocalMinuteDataProvider(config)
+        else:
+            raise QuantDataError(f"Unsupported quant fallback source: {config.data.fallback_source}")
+        status_path = primary.cache_root / "active_source.json"
+        return FailoverQuantDataProvider(primary, fallback, status_path, config.data.fallback_source)
     raise QuantDataError(f"Unsupported quant data source: {config.data.source}")
 
 

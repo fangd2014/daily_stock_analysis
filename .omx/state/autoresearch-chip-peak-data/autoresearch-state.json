@@ -1,0 +1,9 @@
+{
+  "active": false,
+  "validation_mode": "mission-validator-script",
+  "completion_artifact_path": ".omx/specs/autoresearch-chip-peak-data/result.json",
+  "mission_validator_command": "python -m pytest tests/test_quant_*.py -q",
+  "output_artifact_path": ".omx/specs/autoresearch-chip-peak-data/mission.md",
+  "status": "passed",
+  "updated_at": "2026-07-23T21:11:26+08:00"
+}

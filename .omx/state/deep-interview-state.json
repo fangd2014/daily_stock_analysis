@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "current_phase": "deep-interview",
+  "interview_id": "chip-peak-quant-20260723T124545Z",
+  "profile": "standard",
+  "type": "brownfield",
+  "initial_idea": "Independent double-chip-peak quant system targeting stable 10% monthly return with maximum drawdown at or below 10%",
+  "rounds": [],
+  "current_ambiguity": 0.42,
+  "threshold": 0.2,
+  "max_rounds": 12,
+  "challenge_modes_used": [],
+  "codebase_context": "Existing causal chip feature, execution simulator, walk-forward optimizer, and holdout report; baseline incremental return is 0.38% over three months",
+  "current_stage": "feasibility",
+  "current_focus": "success_criteria",
+  "context_snapshot_path": ".omx/context/chip-peak-quant-20260723T124545Z.md",
+  "run_outcome": "continue"
+}
