@@ -1,0 +1,10 @@
+{
+  "symbol": "688008",
+  "name": "澜起科技-筹码双峰策略",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "state_dir": "data/quant_paper/688008_chip_double_peak",
+  "report_dir": "reports/quant_paper/688008_chip_double_peak",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

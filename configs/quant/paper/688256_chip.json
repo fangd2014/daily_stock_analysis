@@ -1,0 +1,14 @@
+{
+  "symbol": "688256",
+  "name": "寒武纪",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "688256.SH",
+  "initial_cash": 300000,
+  "base_ratio": 0.44,
+  "position_fraction": 1.0,
+  "state_dir": "data/quant_paper/tech_chip_buy_ready_3/688256",
+  "report_dir": "reports/quant_paper/tech_chip_buy_ready_3/688256",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

@@ -1,0 +1,11 @@
+{
+  "top_n": 10,
+  "lookback_days": 60,
+  "calendar_days": 150,
+  "selection_buy_position_max": 0.45,
+  "min_average_amount_20d": 100000000,
+  "min_sector_members": 3,
+  "exclude_st": true,
+  "output_dir": "reports/quant/daily_chip_screen",
+  "cache_dir": "data/quant_cache/daily_chip_screen"
+}

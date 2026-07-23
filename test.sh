@@ -253,6 +253,13 @@ test_syntax() {
     success "语法检查通过"
 }
 
+# Run deterministic quantitative backtest tests without network access.
+test_quant() {
+    header "测试场景: T+0量化回测"
+    pytest -q tests/test_quant_*.py
+    success "T+0量化回测测试完成"
+}
+
 # 测试13: Flake8 静态检查
 test_flake8() {
     header "测试场景: Flake8 静态检查"
@@ -271,6 +278,7 @@ test_all() {
     header "运行所有测试"
 
     test_syntax
+    test_quant
     test_code_recognition
     test_yfinance_convert
     test_flake8
@@ -346,6 +354,10 @@ main() {
             shift
             test_syntax "$@"
             ;;
+        quant)
+            shift
+            test_quant "$@"
+            ;;
         flake8|lint)
             shift
             test_flake8 "$@"
@@ -371,6 +383,7 @@ main() {
             echo "  code        - 代码识别测试"
             echo "  yfinance    - YFinance转换测试"
             echo "  syntax      - 语法检查"
+            echo "  quant       - T+0量化回测单元测试"
             echo "  flake8      - 静态检查"
             echo "  all         - 运行所有测试"
             echo ""

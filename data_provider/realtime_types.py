@@ -133,6 +133,9 @@ class UnifiedRealtimeQuote:
     high: Optional[float] = None            # 最高价
     low: Optional[float] = None             # 最低价
     pre_close: Optional[float] = None       # 昨收价
+    up_limit: Optional[float] = None         # Daily upper price limit
+    down_limit: Optional[float] = None       # Daily lower price limit
+    quote_time: Optional[str] = None         # Source quote timestamp
     
     # === 估值指标（仅东财等全量接口有）===
     pe_ratio: Optional[float] = None        # 市盈率(动态)
@@ -157,6 +160,7 @@ class UnifiedRealtimeQuote:
             'price', 'change_pct', 'change_amount', 'volume', 'amount',
             'volume_ratio', 'turnover_rate', 'amplitude',
             'open_price', 'high', 'low', 'pre_close',
+            'up_limit', 'down_limit', 'quote_time',
             'pe_ratio', 'pb_ratio', 'total_mv', 'circ_mv',
             'change_60d', 'high_52w', 'low_52w'
         ]

@@ -36,6 +36,7 @@
 | 复盘 | 大盘复盘 | 每日市场概览、板块涨跌、北向资金 |
 | 推送 | 多渠道通知 | 企业微信、飞书、Telegram、钉钉、邮件、Pushover |
 | 自动化 | 定时运行 | GitHub Actions 定时执行，无需服务器 |
+| 量化研究 | 分钟级 T+0 回测 | VWAP / 筹码双峰策略、T+1 持仓约束、交易成本、滚动验证与盲测 |
 
 ### 技术栈与数据来源
 
@@ -53,6 +54,119 @@
 | 趋势交易 | MA5 > MA10 > MA20 多头排列 |
 | 精确点位 | 买入价、止损价、目标价 |
 | 检查清单 | 每项条件以「满足 / 注意 / 不满足」标记 |
+
+### T+0 量化回测
+
+仓库提供独立的 A 股分钟级研究模块，内置澜起科技 `688008.SH` 示例。策略使用昨日可卖底仓进行日内卖出和回补，并在撮合中计入佣金、印花税、过户费、滑点、涨跌停与成交量限制。
+
+```bash
+# 需要在 .env 配置具备分钟数据权限的 TUSHARE_TOKEN
+python -m src.quant.cli --config configs/quant/688008_t0.json fetch
+python -m src.quant.cli --config configs/quant/688008_t0.json optimize
+python -m src.quant.cli --config configs/quant/688008_t0.json backtest --holdout
+
+# 离线单元与回归测试
+./test.sh quant
+```
+
+缓存写入 `data/quant_cache/`，报告写入 `reports/quant/`。回测结果仅用于研究，不构成投资建议，也不代表未来收益。
+若 Tushare 分钟接口频率不足，可将 CSV/Parquet 路径填入配置的 `data.local_path`，并把 `data.source` 改为 `local`；文件至少需包含时间、OHLC 和成交量列。
+示例配置默认每次只下载一个 6 个月分块，以适配低频账户并支持断点续跑；可按账户权限调整 `max_chunks_per_run`，设为 `0` 表示单次拉取全部缺失分块。
+
+#### 筹码双峰高抛低吸策略
+
+`configs/quant/688008_chip_double_peak.json` 是独立的筹码双峰策略示例。它只使用信号日前 60 个交易日的成交量价格分布，在两个主峰至少相距 8%、峰间谷值不高于较弱峰 70% 时确认双峰。股价位于两峰之间且进入区间下方 28% 时低吸，进入上方 28% 时高抛，回到 50% 中轴平仓。
+
+```bash
+python -m src.quant.cli --config configs/quant/688008_chip_double_peak.json fetch
+python -m src.quant.cli --config configs/quant/688008_chip_double_peak.json backtest
+
+# 初始化 100 万元独立模拟账户
+python -m src.quant.paper --config configs/quant/688008_chip_double_peak_paper.json init
+python -m src.quant.paper --config configs/quant/688008_chip_double_peak_paper.json status
+
+# 如需通过独立任务与现有模拟盘并行运行
+QUANT_PAPER_CONFIG=configs/quant/688008_chip_double_peak_paper.json \
+  QUANT_PAPER_TASK_ID=chip-double-peak \
+  QUANT_PAPER_LOG=logs/quant_paper/chip_double_peak.log \
+  QUANT_PAPER_PYTHON="$(command -v python3)" ./scripts/install_quant_paper_cron.sh
+```
+
+示例采用 30% 底仓，每组交易使用底仓的 30%（约账户权益的 9%），每日最多一组；单次最长持有 24 根 5 分钟 K 线并于收盘前强制恢复底仓。研究验收目标设为年化收益 10%、最大回撤 10%、Calmar 1.2；这是模拟盘筛选门槛而非收益或回撤保证。建议至少运行 6 个月、覆盖 100 组配对交易后再评估参数。
+
+#### 科技龙头双峰组合
+
+`configs/quant/tech_head_universe.json` 定义 20 只半导体、AI 算力、光通信、消费电子和工业软件龙头候选。筛选器按前 60 个交易日确认双峰，要求股价仍在两峰之间、市值不低于 500 亿元且近 20 日平均成交额不低于 5 亿元。首次选股和调股还要求峰间位置不高于 45%，只从当日允许新建仓的股票中按总市值选择 3 只；日内低吸继续使用更严格的 28% 阈值。某只失去资格时，下一只满足全部条件的股票进入筛选结果补位，持仓池不超过 3 只。
+
+```bash
+# 更新筛选结果
+python -m src.quant.tech_screener --config configs/quant/tech_head_universe.json
+
+# 初始化并查看 100 万元、固定 3 只、目标总仓位 30% 的组合模拟盘
+python -m src.quant.portfolio_paper --config configs/quant/tech_chip_portfolio_paper.json init
+python -m src.quant.portfolio_paper --config configs/quant/tech_chip_portfolio_paper.json status
+
+# 使用选股日已满足买入条件的3只股票做三个月无未来数据回测
+python -m src.quant.daily_portfolio_backtest \
+  --selection reports/quant/tech_chip_screen/selection_20260422.json \
+  --template-config configs/quant/688008_chip_double_peak.json \
+  --start 2026-04-23 --end 2026-07-22 \
+  --output-dir reports/quant/tech_chip_3m_20260423_20260722
+
+# 手动生成当日收盘复盘
+python -m src.quant.daily_review \
+  --config configs/quant/tech_chip_portfolio_paper.json \
+  --at 2026-07-23T15:25:00+08:00
+
+# 与原有模拟盘并行安装，使用相同任务 ID 可幂等更新组合成分
+QUANT_PAPER_MODULE=src.quant.portfolio_paper \
+  QUANT_DAILY_REVIEW_MODULE=src.quant.daily_review \
+  QUANT_PAPER_CONFIG=configs/quant/tech_chip_portfolio_paper.json \
+  QUANT_PAPER_TASK_ID=chip-double-peak \
+  QUANT_PAPER_LOG=logs/quant_paper/tech_chip_portfolio.log \
+  QUANT_PAPER_PYTHON="$(command -v python3)" ./scripts/install_quant_paper_cron.sh
+```
+
+组合模拟盘为每只股票维护独立资金、底仓、T+1 可卖数量和双峰信号，再汇总为 100 万元组合权益。由于 A 股按 100 股整手交易，实际建仓仓位允许在 30% 附近最多偏差 1 个百分点；不会为了凑足仓位买入未通过双峰筛选的股票。持仓池按条件保持 3 只，建议每月执行一次成分复核，避免每日换股。
+
+三个月回测采用选股日以前的历史数据确认资格，以当日收盘信号、下一交易日开盘成交作日线近似。完整报告位于 `reports/quant/tech_chip_3m_20260423_20260722/report.md`。日线近似用于验证逻辑，不等同于5分钟模拟盘的精确成交结果。
+
+启用 `QUANT_DAILY_REVIEW_MODULE` 后，cron 会在每个工作日 15:25 汇总成交、费用、规则错误和策略内亏损，报告写入 `reports/quant_paper/tech_chip_portfolio/daily_reviews/`。少于30组配对时只收集样本；达到门槛后仅写入 `optimization_queue.json` 作为候选，任何参数都必须通过滚动验证后人工启用，不会因单日盈亏自动修改。
+
+#### 每晚筹码双峰10股筛选与次日指导
+
+`configs/quant/daily_chip_screen.json` 面向全A股做独立晚间筛选。筹码双峰仅使用信号日以前60个交易日；信号日要求股票仍处于双峰之间且峰间位置不高于45%、所属行业成分股平均涨幅为正、大单与特大单合计净买入为正。合格股票按收盘价距低筹码峰的百分比由近到远排序，固定选择10只；不足10只时任务报错，不使用不合格股票补位。
+
+```bash
+# 只运行筛选，不调用AI或推送
+python -m src.quant.daily_chip_screener \
+  --config configs/quant/daily_chip_screen.json screen
+
+# 完整运行：筛选10只、DeepSeek生成次日指导、推送飞书
+python -m src.quant.daily_chip_screener \
+  --config configs/quant/daily_chip_screen.json run
+
+# 安装每个工作日20:00的独立定时任务
+DAILY_CHIP_SCREEN_PYTHON="$(command -v python3)" \
+  ./scripts/install_daily_chip_screen_cron.sh
+```
+
+完整任务需要在 `.env` 配置 `TUSHARE_TOKEN`、`DEEPSEEK_API_KEY`（也可复用 `OPENAI_API_KEY`）和 `FEISHU_WEBHOOK_URL`。DeepSeek 每只输出下一交易日操作结论、触发区间、止损失效条件及止盈减仓条件；报告写入 `reports/quant/daily_chip_screen/` 后再推送，Webhook 不会写入报告或日志。同一交易日只成功推送一次，节假日不会重复推送上一交易日结果；飞书失败时会保留指导供重试。该指导仅供模拟盘研究。
+
+### T+0 模拟盘
+
+`configs/quant/688008_paper.json` 提供 100 万元澜起科技模拟账户，起始日为 `2026-07-21`。系统每 5 分钟读取腾讯行情并持久化账户、K 线和模拟成交；首日按 60% 资金建立底仓，买入股份在下一交易日结算后才可用于 T+0。该流程不会连接券商或提交真实委托。
+
+```bash
+# 初始化并查看账户
+python -m src.quant.paper --config configs/quant/688008_paper.json init
+python -m src.quant.paper --config configs/quant/688008_paper.json status
+
+# 安装幂等的本机定时任务：交易时段轮询，周五 15:20 生成周报
+QUANT_PAPER_PYTHON="$(command -v python3)" ./scripts/install_quant_paper_cron.sh
+```
+
+运行状态保存在 `data/quant_paper/688008/`，日志位于 `logs/quant_paper/cron.log`，周报写入 `reports/quant_paper/688008/week_*.md` 并同步更新 `latest.md`。收益目标不构成保证，评估应以持续模拟结果为准。
 
 ## 🚀 快速开始
 

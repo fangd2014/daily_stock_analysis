@@ -1,0 +1,14 @@
+{
+  "symbol": "603986",
+  "name": "兆易创新",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "603986.SH",
+  "initial_cash": 200000,
+  "base_ratio": 0.24,
+  "position_fraction": 1.0,
+  "state_dir": "data/quant_paper/tech_chip_buy_ready_3/603986",
+  "report_dir": "reports/quant_paper/tech_chip_buy_ready_3/603986",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

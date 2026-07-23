@@ -8,6 +8,7 @@
 # 测试文件（可能包含敏感配置）
 test_*.py
 !test_env.py
+!tests/test_quant_*.py
 
 # Python
 __pycache__/

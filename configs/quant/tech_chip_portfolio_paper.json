@@ -1,0 +1,13 @@
+{
+  "name": "科技龙头筹码双峰",
+  "initial_cash": 1000000,
+  "target_exposure": 0.3,
+  "max_positions": 3,
+  "account_configs": [
+    "configs/quant/paper/688256_chip.json",
+    "configs/quant/paper/603986_chip.json",
+    "configs/quant/paper/688036_chip.json"
+  ],
+  "report_dir": "reports/quant_paper/tech_chip_portfolio",
+  "timezone": "Asia/Shanghai"
+}

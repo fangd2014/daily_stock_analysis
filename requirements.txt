@@ -22,6 +22,8 @@ lark-oapi>=1.0.0             # 飞书API
 # 数据处理
 pandas>=2.0.0               # 数据分析
 numpy>=1.24.0               # 数值计算
+pyarrow>=14.0.0             # Parquet cache for minute-bar research
+matplotlib>=3.7.0           # Backtest equity and drawdown charts
 json-repair>=0.55.1         # JSON 修复
 
 # AI 分析

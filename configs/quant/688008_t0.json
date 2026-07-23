@@ -1,0 +1,64 @@
+{
+  "symbol": "688008.SH",
+  "name": "Montage Technology",
+  "start_date": "2020-07-01",
+  "end_date": "2026-06-30",
+  "output_dir": "reports/quant/688008",
+  "data": {
+    "source": "tushare",
+    "frequency": "5min",
+    "cache_dir": "data/quant_cache",
+    "request_pause_seconds": 61,
+    "minute_chunk_months": 6,
+    "max_chunks_per_run": 1
+  },
+  "portfolio": {
+    "initial_cash": 1000000,
+    "base_ratio": 0.6,
+    "lot_size": 100,
+    "max_volume_participation": 0.05
+  },
+  "costs": {
+    "commission_rate": 0.00025,
+    "minimum_commission": 5,
+    "stamp_tax_rate": 0.0005,
+    "transfer_fee_rate": 0.00001,
+    "slippage_bps": 2
+  },
+  "strategy": {
+    "zscore_window": 18,
+    "entry_z": 1.5,
+    "exit_z": 0.25,
+    "position_fraction": 0.2,
+    "stop_loss_pct": 0.006,
+    "max_holding_bars": 12,
+    "max_pairs_per_day": 2,
+    "min_edge_bps": 20,
+    "no_entry_before": "09:45",
+    "no_entry_after": "14:30",
+    "force_exit_at": "14:50",
+    "daily_loss_limit": 0.006,
+    "daily_trend_limit": 0.08,
+    "daily_volatility_limit": 0.06,
+    "intraday_vwap_drift_limit": 0.015
+  },
+  "optimization": {
+    "train_months": 24,
+    "validation_months": 6,
+    "step_months": 6,
+    "holdout_start": "2025-07-01",
+    "holdout_end": "2026-06-30",
+    "min_trades_per_year": 24,
+    "zscore_windows": [12, 18, 24],
+    "entry_z_values": [1.25, 1.5, 1.75, 2.0],
+    "exit_z_values": [0.0, 0.25, 0.5],
+    "position_fractions": [0.1, 0.2, 0.3],
+    "stop_loss_values": [0.004, 0.006, 0.008]
+  },
+  "acceptance": {
+    "annual_return_min": 0.3,
+    "max_drawdown_max": 0.25,
+    "calmar_min": 2.0,
+    "mean_monthly_return_min": 0.025
+  }
+}

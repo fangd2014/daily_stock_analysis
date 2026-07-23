@@ -1,0 +1,33 @@
+{
+  "initial_cash": 1000000,
+  "target_exposure": 0.3,
+  "max_positions": 3,
+  "min_market_cap": 50000000000,
+  "min_average_amount": 500000000,
+  "lookback_days": 60,
+  "calendar_days": 240,
+  "selection_buy_position_max": 0.45,
+  "output_dir": "reports/quant/tech_chip_screen",
+  "universe": [
+    {"symbol": "688981.SH", "name": "中芯国际", "industry": "晶圆制造"},
+    {"symbol": "002371.SZ", "name": "北方华创", "industry": "半导体设备"},
+    {"symbol": "688041.SH", "name": "海光信息", "industry": "国产算力"},
+    {"symbol": "300308.SZ", "name": "中际旭创", "industry": "光通信"},
+    {"symbol": "603501.SH", "name": "豪威集团", "industry": "图像传感器"},
+    {"symbol": "002475.SZ", "name": "立讯精密", "industry": "消费电子"},
+    {"symbol": "000063.SZ", "name": "中兴通讯", "industry": "通信设备"},
+    {"symbol": "688008.SH", "name": "澜起科技", "industry": "内存接口芯片"},
+    {"symbol": "300750.SZ", "name": "宁德时代", "industry": "新能源科技"},
+    {"symbol": "002415.SZ", "name": "海康威视", "industry": "智能物联"},
+    {"symbol": "688256.SH", "name": "寒武纪", "industry": "AI 芯片"},
+    {"symbol": "300502.SZ", "name": "新易盛", "industry": "光通信"},
+    {"symbol": "002230.SZ", "name": "科大讯飞", "industry": "人工智能"},
+    {"symbol": "603986.SH", "name": "兆易创新", "industry": "存储芯片"},
+    {"symbol": "002049.SZ", "name": "紫光国微", "industry": "特种集成电路"},
+    {"symbol": "600584.SH", "name": "长电科技", "industry": "半导体封测"},
+    {"symbol": "300124.SZ", "name": "汇川技术", "industry": "工业自动化"},
+    {"symbol": "688012.SH", "name": "中微公司", "industry": "半导体设备"},
+    {"symbol": "688111.SH", "name": "金山办公", "industry": "基础软件"},
+    {"symbol": "688036.SH", "name": "传音控股", "industry": "智能终端"}
+  ]
+}

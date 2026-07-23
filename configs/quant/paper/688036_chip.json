@@ -1,0 +1,14 @@
+{
+  "symbol": "688036",
+  "name": "传音控股",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "688036.SH",
+  "initial_cash": 500000,
+  "base_ratio": 0.242,
+  "position_fraction": 0.06,
+  "state_dir": "data/quant_paper/tech_chip_buy_ready_3/688036",
+  "report_dir": "reports/quant_paper/tech_chip_buy_ready_3/688036",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}
