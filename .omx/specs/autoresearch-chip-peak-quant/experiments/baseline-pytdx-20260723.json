@@ -1,0 +1,26 @@
+{
+  "experiment_id": "baseline-pytdx-20260723",
+  "purpose": "Diagnostic baseline only; shorter than the required 36-month out-of-sample window.",
+  "period": {
+    "start": "2024-07-02",
+    "end": "2026-07-23",
+    "months": 25
+  },
+  "configuration": {
+    "strategy": "chip_double_peak",
+    "base_ratio": 0.3,
+    "pair_fraction_of_base": 0.3,
+    "max_pairs_per_day": 1,
+    "dynamic_base_enabled": false
+  },
+  "metrics": {
+    "total_return": 0.9064048005527003,
+    "annual_return": 0.367480306211289,
+    "median_monthly_return": 0.007654251296944192,
+    "max_drawdown": 0.2939196346138112,
+    "pair_count": 48,
+    "t0_pair_pnl": 6570.800552700166
+  },
+  "verdict": "failed_diagnostic_targets",
+  "evidence": "Static base appreciation dominates returns; the T+0 pairs add only CNY 6,570.80 and do not control the 29.39% drawdown."
+}

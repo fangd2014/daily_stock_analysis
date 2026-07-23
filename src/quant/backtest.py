@@ -42,6 +42,22 @@ class BacktestEngine:
             result[record_key] = record
         return result
 
+    def _base_risk_allowed(self, row: Any) -> bool:
+        if not self.config.strategy.dynamic_base_enabled:
+            return True
+        trend = getattr(row, "prior_daily_trend", None)
+        volatility = getattr(row, "prior_daily_volatility", None)
+        return bool(
+            pd.notna(trend)
+            and pd.notna(volatility)
+            and float(trend) >= self.config.strategy.dynamic_base_trend_min
+            and float(volatility) <= self.config.strategy.dynamic_base_volatility_max
+        )
+
+    def _base_quantity(self, price: float) -> int:
+        desired = int(self.config.portfolio.initial_cash * self.config.portfolio.base_ratio / price)
+        return desired // self.config.portfolio.lot_size * self.config.portfolio.lot_size
+
     def run(self, bundle: QuantDataBundle, evaluation_start: str | None = None) -> BacktestResult:
         if bundle.bars.empty:
             raise ValueError("Backtest requires at least one minute bar")
@@ -60,12 +76,14 @@ class BacktestEngine:
         pending_delay = 0
         current_date: Optional[pd.Timestamp] = None
         target_base_shares = 0
+        strategy_allowed_today = False
 
         rows = list(bars.itertuples(index=False))
         for index, row in enumerate(rows):
             timestamp = pd.Timestamp(row.datetime)
             trade_date = timestamp.normalize()
-            if current_date is None or trade_date != current_date:
+            new_day = current_date is None or trade_date != current_date
+            if new_day:
                 if current_date is not None:
                     action = dividend_map.get(trade_date)
                     if action:
@@ -78,15 +96,36 @@ class BacktestEngine:
                     broker.ledger.settle_new_day()
                 current_date = trade_date
                 strategy.on_new_day(trade_date, broker.ledger.equity(float(row.open)))
+                strategy_allowed_today = self._base_risk_allowed(row)
 
             limits = limit_map.get(trade_date, {})
             if index == 0:
-                desired = int(self.config.portfolio.initial_cash * self.config.portfolio.base_ratio / float(row.open))
-                desired = desired // self.config.portfolio.lot_size * self.config.portfolio.lot_size
-                broker.ledger.cash -= desired * float(row.open)
-                broker.ledger.total_shares = desired
-                broker.ledger.sellable_shares = desired
-                target_base_shares = desired
+                if strategy_allowed_today:
+                    desired = self._base_quantity(float(row.open))
+                    broker.ledger.cash -= desired * float(row.open)
+                    broker.ledger.total_shares = desired
+                    broker.ledger.sellable_shares = desired
+                    target_base_shares = desired
+            elif new_day and self.config.strategy.dynamic_base_enabled:
+                if not strategy_allowed_today and broker.ledger.total_shares > 0:
+                    order = Order(
+                        side="sell",
+                        quantity=broker.ledger.total_shares,
+                        reason="dynamic_base_risk_off",
+                        action="base_exit",
+                        signal_time=timestamp,
+                    )
+                    broker.execute(order, row, limits.get("up_limit"), limits.get("down_limit"))
+                elif strategy_allowed_today and broker.ledger.total_shares == 0:
+                    order = Order(
+                        side="buy",
+                        quantity=self._base_quantity(float(row.open)),
+                        reason="dynamic_base_risk_on",
+                        action="base_entry",
+                        signal_time=timestamp,
+                    )
+                    broker.execute(order, row, limits.get("up_limit"), limits.get("down_limit"))
+                target_base_shares = broker.ledger.total_shares
             elif pending_order is not None:
                 pending_delay -= 1
             if index > 0 and pending_order is not None and pending_delay <= 0:
@@ -99,7 +138,7 @@ class BacktestEngine:
                 strategy.on_fill(fill)
                 pending_order = None
 
-            if self.strategy_enabled and index < len(rows) - 1:
+            if self.strategy_enabled and strategy_allowed_today and index < len(rows) - 1:
                 next_order = strategy.on_bar(row, broker.ledger, target_base_shares)
                 if pending_order is None and next_order is not None:
                     pending_order = next_order

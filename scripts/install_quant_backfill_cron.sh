@@ -32,10 +32,10 @@ awk -v start="$START_MARKER" -v end="$END_MARKER" '
 
 {
     printf '%s\n' "$START_MARKER"
-    printf '17 * * * * cd "%s" && "%s" -m src.quant.cli --config "%s" fetch >> "%s" 2>&1\n' \
+    printf '17 0,12 * * * cd "%s" && "%s" -m src.quant.cli --config "%s" fetch >> "%s" 2>&1\n' \
         "$PROJECT_ROOT" "$PYTHON_BIN" "$CONFIG_PATH" "$LOG_PATH"
     printf '%s\n' "$END_MARKER"
 } >>"$UPDATED_CRON"
 
 crontab "$UPDATED_CRON"
-printf 'Installed hourly quant history backfill with Python: %s\n' "$PYTHON_BIN"
+printf 'Installed scheduled quant history backfill with Python: %s\n' "$PYTHON_BIN"

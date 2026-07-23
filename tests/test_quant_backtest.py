@@ -87,3 +87,34 @@ def test_extra_delay_moves_fills_by_at_least_two_bars():
     assert not pair_trades.empty
     delays = pd.to_datetime(pair_trades["timestamp"]) - pd.to_datetime(pair_trades["signal_time"])
     assert (delays >= pd.Timedelta(minutes=10)).all()
+
+
+def test_dynamic_base_enters_on_prior_uptrend_and_exits_after_trend_break():
+    bundle = synthetic_bundle()
+    trade_dates = sorted(bundle.bars["datetime"].dt.normalize().unique())
+    falling_dates = set(trade_dates[-6:])
+    falling = bundle.bars["datetime"].dt.normalize().isin(falling_dates)
+    for column in ("open", "high", "low", "close"):
+        bundle.bars.loc[falling, column] *= 0.75
+    bundle.bars.loc[falling, "amount"] = bundle.bars.loc[falling, "close"] * bundle.bars.loc[falling, "volume"]
+    strategy = replace(
+        StrategyConfig(),
+        dynamic_base_enabled=True,
+        dynamic_base_trend_min=0.001,
+        dynamic_base_volatility_max=0.5,
+        daily_trend_limit=0.5,
+        daily_volatility_limit=0.5,
+    )
+    config = QuantConfig(
+        "688008.SH",
+        "Dynamic Base",
+        "2025-01-02",
+        "2025-02-28",
+        "reports/quant/test",
+        strategy=strategy,
+    )
+
+    result = BacktestEngine(config, strategy_enabled=False).run(bundle)
+
+    assert "base_entry" in set(result.trades["action"])
+    assert "base_exit" in set(result.trades["action"])

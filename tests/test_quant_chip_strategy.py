@@ -1,5 +1,6 @@
 """Deterministic tests for the chip double-peak strategy."""
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pandas as pd
@@ -88,6 +89,7 @@ def test_chip_strategy_sells_in_the_high_zone():
         chip_double_peak=True,
         chip_price_between_peaks=True,
         prior_regime_allowed=True,
+        zscore=1.0,
     )
 
     entry = strategy.on_bar(high_row, ledger, target_base_shares=5_000)
@@ -111,6 +113,28 @@ def test_chip_strategy_does_not_trade_without_a_confirmed_valley():
         chip_double_peak=False,
         chip_price_between_peaks=True,
         prior_regime_allowed=True,
+        zscore=1.0,
+    )
+
+    assert strategy.on_bar(row, ledger, target_base_shares=5_000) is None
+
+
+def test_chip_strategy_applies_direction_and_vwap_confirmation_filters():
+    config = _strategy_config()
+    config = replace(config, chip_enable_high_sell=False, chip_vwap_confirmation_z=1.5)
+    strategy = ChipDoublePeakStrategy(config, lot_size=100)
+    strategy.on_new_day(pd.Timestamp("2026-02-09"), 1_000_000.0)
+    ledger = PortfolioLedger(cash=500_000.0, total_shares=5_000, sellable_shares=5_000)
+    row = SimpleNamespace(
+        datetime=pd.Timestamp("2026-02-09 10:00"),
+        close=106.0,
+        chip_position=0.8,
+        chip_lower_peak=90.0,
+        chip_upper_peak=110.0,
+        chip_double_peak=True,
+        chip_price_between_peaks=True,
+        prior_regime_allowed=True,
+        zscore=2.0,
     )
 
     assert strategy.on_bar(row, ledger, target_base_shares=5_000) is None

@@ -342,6 +342,7 @@ class ChipDoublePeakStrategy(VwapT0Strategy):
         time_value = timestamp.time()
         close = float(row.close)
         position = float(row.chip_position) if pd.notna(row.chip_position) else np.nan
+        zscore = float(row.zscore) if pd.notna(row.zscore) else np.nan
         lower_peak = float(row.chip_lower_peak) if pd.notna(row.chip_lower_peak) else np.nan
         upper_peak = float(row.chip_upper_peak) if pd.notna(row.chip_upper_peak) else np.nan
         drawdown_halted = self._account_drawdown_halted(ledger, close)
@@ -392,10 +393,29 @@ class ChipDoublePeakStrategy(VwapT0Strategy):
         quantity = self._round_lot(target_base_shares * self.config.position_fraction)
         if quantity <= 0:
             return None
-        if position >= self.config.chip_high_entry_position and ledger.sellable_shares >= quantity:
+        high_confirmed = (
+            self.config.chip_vwap_confirmation_z <= 0
+            or (pd.notna(zscore) and zscore >= self.config.chip_vwap_confirmation_z)
+        )
+        if (
+            self.config.chip_enable_high_sell
+            and high_confirmed
+            and position >= self.config.chip_high_entry_position
+            and ledger.sellable_shares >= quantity
+        ):
             return Order("sell", quantity, "chip_upper_zone", "entry_high", timestamp)
         estimated_cost = quantity * close
-        if position <= self.config.chip_low_entry_position and ledger.cash >= estimated_cost:
+        low_confirmed = (
+            self.config.chip_vwap_confirmation_z <= 0
+            or (pd.notna(zscore) and zscore <= -self.config.chip_vwap_confirmation_z)
+        )
+        if (
+            self.config.chip_enable_low_buy
+            and low_confirmed
+            and position <= self.config.chip_low_entry_position
+            and ledger.cash >= estimated_cost
+            and ledger.sellable_shares >= quantity
+        ):
             return Order("buy", quantity, "chip_lower_zone", "entry_low", timestamp)
         return None
 

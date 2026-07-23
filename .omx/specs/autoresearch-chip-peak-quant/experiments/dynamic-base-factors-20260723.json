@@ -1,0 +1,30 @@
+{
+  "experiment_id": "dynamic-base-factors-20260723",
+  "purpose": "Diagnostic factor screening on the available 25-month PyTDX window; not final out-of-sample evidence.",
+  "baseline": {
+    "median_monthly_return": 0.007654251296944192,
+    "max_drawdown": 0.2939196346138112,
+    "t0_pair_pnl": 6570.800552700166
+  },
+  "dynamic_base_grid": {
+    "trend_min_values": [-0.02, 0.0, 0.02],
+    "volatility_max_values": [0.03, 0.05],
+    "best_drawdown": 0.06258544342551753,
+    "best_return_with_drawdown_below_10pct": 0.22479028753451957,
+    "median_monthly_return_at_best_risk_candidates": 0.0
+  },
+  "direction_and_vwap_grid": {
+    "directions": ["both", "high_sell", "low_buy"],
+    "vwap_z_values": [0.0, 1.0],
+    "pair_fraction_of_base": 1.0,
+    "max_pairs_per_day": 2,
+    "best_pair_pnl": -4582.4161700160475,
+    "best_profit_factor": 0.6834789910812717
+  },
+  "verdict": "reject_current_pair_scaling",
+  "decision": [
+    "Keep the dynamic base overlay as a risk-control candidate because several settings reduce drawdown below 10%.",
+    "Reject scaling the current chip pair logic to the full base inventory; every tested direction and VWAP filter loses money after costs.",
+    "Move the next loop to cross-stock portfolio selection and a revised exit model instead of weakening the acceptance thresholds."
+  ]
+}

@@ -79,6 +79,12 @@ class StrategyConfig:
     chip_high_entry_position: float = 0.72
     chip_exit_position: float = 0.50
     chip_breakout_buffer_pct: float = 0.01
+    dynamic_base_enabled: bool = False
+    dynamic_base_trend_min: float = 0.0
+    dynamic_base_volatility_max: float = 0.04
+    chip_enable_high_sell: bool = True
+    chip_enable_low_buy: bool = True
+    chip_vwap_confirmation_z: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -224,6 +230,14 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError("chip positions must satisfy 0 < low < exit < high < 1")
     if config.strategy.chip_breakout_buffer_pct <= 0:
         raise ValueError("strategy.chip_breakout_buffer_pct must be positive")
+    if not -1 < config.strategy.dynamic_base_trend_min < 1:
+        raise ValueError("strategy.dynamic_base_trend_min must be between -1 and 1")
+    if not 0 < config.strategy.dynamic_base_volatility_max < 1:
+        raise ValueError("strategy.dynamic_base_volatility_max must be between 0 and 1")
+    if config.strategy.chip_vwap_confirmation_z < 0:
+        raise ValueError("strategy.chip_vwap_confirmation_z must not be negative")
+    if not config.strategy.chip_enable_high_sell and not config.strategy.chip_enable_low_buy:
+        raise ValueError("At least one chip trading direction must be enabled")
     if config.acceptance.min_out_of_sample_months < 0:
         raise ValueError("acceptance.min_out_of_sample_months must not be negative")
     if config.acceptance.median_monthly_return_min < -1:

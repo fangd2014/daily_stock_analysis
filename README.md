@@ -91,7 +91,7 @@ python -m src.quant.cli --config configs/quant/quant_research_tdx.json fetch
 python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch
 ```
 
-该配置用 Tushare 分区回填 `2021-07-01` 至 `2024-07-01`，用 PyTDX 提供此后的分钟行情。低频 Tushare 账户每次只回填一个 6 个月分块；未补齐月份会记录在 `hybrid_status.json` 并阻止优化，额度重置后重复执行即可续传。验收期固定为 `2023-07` 至 `2026-06` 共 36 个月，硬门槛为月收益中位数不低于 10%、账户最大回撤不高于 10%。未达到任一条件时报告必须为失败；该门槛不是收益保证。
+该配置用 Tushare 分区回填 `2021-07-01` 至 `2024-07-01`，用 PyTDX 提供此后的分钟行情。低频 Tushare 账户每次只回填一个 7 个月分块；未补齐月份会记录在 `hybrid_status.json` 并阻止优化，额度重置后重复执行即可续传。验收期固定为 `2023-07` 至 `2026-06` 共 36 个月，硬门槛为月收益中位数不低于 10%、账户最大回撤不高于 10%。未达到任一条件时报告必须为失败；该门槛不是收益保证。
 
 若账户的 `stk_mins` 权限为每小时一次，可安装幂等回填任务：
 
@@ -99,7 +99,9 @@ python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch
 QUANT_BACKFILL_PYTHON="$(command -v python3)" ./scripts/install_quant_backfill_cron.sh
 ```
 
-任务每小时第 17 分钟运行，每次最多请求一个分块；所有历史分区补齐后仍会保留覆盖检查，但不会重复请求已经缓存的 Tushare 分钟数据。
+任务每天 `00:17` 和 `12:17` 运行，以匹配当前 Token 的每天 2 次 `stk_mins` 配额，每次最多请求一个分块；所有历史分区补齐后仍会保留覆盖检查，但不会重复请求已经缓存的 Tushare 分钟数据。
+
+策略支持基于前一交易日趋势和波动率的动态底仓开关，以及高抛/低吸方向和 VWAP Z-score 确认因子。所有信号只使用前一日或当前已收盘 K 线；这些因子必须先通过滚动验证，不能直接根据盲测期表现启用。近期诊断表明动态底仓可显著降低回撤，但当前双峰配对放大仓位后成本后收益为负，因此尚未达到最终目标。
 
 #### 筹码双峰高抛低吸策略
 

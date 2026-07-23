@@ -5,6 +5,8 @@
   "mission_validator_command": "python -m src.quant.validate_research --config configs/quant/quant_research_36m.json --output .omx/specs/autoresearch-chip-peak-quant/result.json",
   "output_artifact_path": "reports/quant/chip_peak_36m_oos/report.md",
   "status": "running",
-  "phase": "historical_data_backfill",
-  "updated_at": "2026-07-23T21:51:52+08:00"
+  "phase": "historical_data_backfill_and_factor_diagnostics",
+  "data_status": "37 historical month partitions pending; Tushare quota is 2 stk_mins calls per day",
+  "next_scheduled_backfill": "2026-07-24T00:17:00+08:00",
+  "updated_at": "2026-07-23T22:20:09+08:00"
 }

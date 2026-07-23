@@ -10,7 +10,7 @@
     "frequency": "5min",
     "cache_dir": "data/quant_cache",
     "request_pause_seconds": 61,
-    "minute_chunk_months": 6,
+    "minute_chunk_months": 7,
     "max_chunks_per_run": 1,
     "tdx_history_start_date": "2024-07-02",
     "tdx_endpoints": [],
