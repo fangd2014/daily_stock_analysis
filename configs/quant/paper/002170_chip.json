@@ -1,0 +1,14 @@
+{
+  "symbol": "002170",
+  "name": "芭田股份",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "002170.SZ",
+  "initial_cash": 200000,
+  "base_ratio": 0.3,
+  "position_fraction": 1.0,
+  "state_dir": "data/quant_paper/all_a_chip_buy_ready_5/002170",
+  "report_dir": "reports/quant_paper/all_a_chip_buy_ready_5/002170",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

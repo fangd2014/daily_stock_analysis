@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -234,3 +235,33 @@ def test_feishu_notifier_sends_interactive_card_without_exposing_webhook(monkeyp
     assert captured["url"] == webhook
     assert captured["payload"]["msg_type"] == "interactive"
     assert webhook not in str(captured["payload"])
+
+
+def test_cron_runner_loads_deepseek_key_from_zshrc(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".zshrc").write_text(
+        "export DEEPSEEK_API_KEY=test-from-zshrc```\n",
+        encoding="utf-8",
+    )
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        "#!/bin/sh\n"
+        "test \"$DEEPSEEK_API_KEY\" = test-from-zshrc || exit 9\n"
+        "printf 'key-loaded\\n'\n",
+        encoding="utf-8",
+    )
+    probe.chmod(0o700)
+    runner = Path(__file__).parents[1] / "scripts" / "run_daily_chip_screen.zsh"
+
+    completed = subprocess.run(
+        ["/bin/zsh", str(runner), str(probe), "unused.json"],
+        cwd=Path(__file__).parents[1],
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "key-loaded\n"

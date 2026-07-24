@@ -1,13 +1,15 @@
 {
-  "name": "科技龙头筹码双峰",
+  "name": "全A筹码双峰五股组合",
   "initial_cash": 1000000,
   "target_exposure": 0.3,
-  "max_positions": 3,
+  "max_positions": 5,
   "account_configs": [
-    "configs/quant/paper/688256_chip.json",
-    "configs/quant/paper/603986_chip.json",
-    "configs/quant/paper/688036_chip.json"
+    "configs/quant/paper/688231_chip.json",
+    "configs/quant/paper/603341_chip.json",
+    "configs/quant/paper/000801_chip.json",
+    "configs/quant/paper/300596_chip.json",
+    "configs/quant/paper/002368_chip.json"
   ],
-  "report_dir": "reports/quant_paper/tech_chip_portfolio",
+  "report_dir": "reports/quant_paper/all_a_chip_portfolio",
   "timezone": "Asia/Shanghai"
 }

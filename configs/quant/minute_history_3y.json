@@ -1,0 +1,21 @@
+{
+  "symbols": [
+    "688231.SH",
+    "603341.SH",
+    "000801.SZ",
+    "300596.SZ",
+    "002368.SZ",
+    "688008.SH"
+  ],
+  "start_date": "2023-07-24",
+  "end_date": "2026-07-24",
+  "frequency": "5min",
+  "source_priority": ["tushare", "akshare", "baostock", "tdx2db"],
+  "cache_dir": "data/quant_minute_history_3y",
+  "report_dir": "reports/quant/minute_history_3y",
+  "tushare_chunk_months": 6,
+  "tushare_max_requests_per_run": 1,
+  "request_pause_seconds": 61,
+  "network_timeout_seconds": 30,
+  "tdx_path": ""
+}

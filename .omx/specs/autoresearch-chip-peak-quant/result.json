@@ -1,16 +1,20 @@
 {
   "status": "failed",
   "passed": false,
-  "observed_out_of_sample_months": 0,
+  "observed_out_of_sample_months": 36,
   "required_out_of_sample_months": 36,
-  "median_monthly_return": 0.0,
-  "required_median_monthly_return": 0.1,
-  "max_drawdown": 1.0,
-  "maximum_allowed_drawdown": 0.1,
+  "annual_return": 0.010111432485214955,
+  "required_annual_return": 0.15,
+  "target_annual_return": 0.2,
+  "median_monthly_return": 0.0016666561161007287,
+  "required_median_monthly_return": 0.08,
+  "max_drawdown": 0.11348938721616109,
+  "maximum_allowed_drawdown": 0.15,
+  "target_max_drawdown": 0.1,
   "missing_months": [],
   "failures": [
-    "monthly_returns_missing",
-    "equity_missing"
+    "annual_return_below_target",
+    "median_monthly_return_below_target"
   ],
-  "summary": "Required holdout artifacts are missing."
+  "summary": "Strict out-of-sample validation failed: annual_return_below_target, median_monthly_return_below_target"
 }

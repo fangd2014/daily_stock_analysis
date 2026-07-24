@@ -358,6 +358,28 @@ class PaperTradingService:
             self.store.append("pairs.csv", PAIR_FIELDS, pair.to_dict())
         strategy.closed_pairs.clear()
 
+    def _initial_entry_block_reason(self, quote: UnifiedRealtimeQuote) -> Optional[str]:
+        """Reject an initial base entry when the next-session quote is no longer buy-ready."""
+        price = float(quote.price or 0.0)
+        if price <= 0:
+            return "invalid_entry_price"
+        if quote.up_limit and price >= float(quote.up_limit) - 1e-9:
+            return "limit_up"
+        if quote.pre_close and price / float(quote.pre_close) - 1.0 > self.config.max_initial_entry_gap_pct:
+            return "entry_gap_too_high"
+        lower = self.config.selection_lower_peak
+        upper = self.config.selection_upper_peak
+        if lower is None or upper is None:
+            return None
+        if price < lower:
+            return "price_below_selection_lower_peak"
+        if price > upper:
+            return "price_above_selection_upper_peak"
+        position = (price - lower) / (upper - lower)
+        if position > self.config.selection_buy_position_max:
+            return "price_above_selection_buy_zone"
+        return None
+
     def tick(self, now: datetime | None = None) -> dict[str, Any]:
         if now is None:
             current = datetime.now(self.timezone)
@@ -405,28 +427,43 @@ class PaperTradingService:
         row = SimpleNamespace(**bar_values)
         pending = _deserialize_order(state.get("pending_order"))
         state["pending_order"] = None
+        initial_entry_block = self._initial_entry_block_reason(quote)
         if pending is not None:
-            fill = broker.execute(pending, row, quote.up_limit, quote.down_limit)
-            self._append_fill(fill)
-            if pending.action == "initial_base" and fill.status == "filled":
-                desired = int(state["target_base_shares"])
-                if broker.ledger.total_shares >= desired:
-                    state["base_initialized"] = True
+            if pending.action == "initial_base" and initial_entry_block:
+                state["last_signal"] = {
+                    "timestamp": pd.Timestamp(quote_time).isoformat(),
+                    "initial_base_allowed": False,
+                    "reason": initial_entry_block,
+                }
             else:
-                strategy.on_fill(fill)
+                fill = broker.execute(pending, row, quote.up_limit, quote.down_limit)
+                self._append_fill(fill)
+                if pending.action == "initial_base" and fill.status == "filled":
+                    desired = int(state["target_base_shares"])
+                    if broker.ledger.total_shares >= desired:
+                        state["base_initialized"] = True
+                else:
+                    strategy.on_fill(fill)
 
         if not state.get("base_initialized"):
-            target_value = self.quant_config.portfolio.initial_cash * self.quant_config.portfolio.base_ratio
-            lot_size = self.quant_config.portfolio.lot_size
-            desired = int(target_value / float(quote.price)) // lot_size * lot_size
-            state["target_base_shares"] = max(int(state.get("target_base_shares", 0)), desired)
-            remaining = max(int(state["target_base_shares"]) - broker.ledger.total_shares, 0)
-            if remaining > 0:
-                state["pending_order"] = _serialize_order(
-                    Order("buy", remaining, "initialize_base", "initial_base", pd.Timestamp(quote_time))
-                )
+            if initial_entry_block:
+                state["last_signal"] = {
+                    "timestamp": pd.Timestamp(quote_time).isoformat(),
+                    "initial_base_allowed": False,
+                    "reason": initial_entry_block,
+                }
             else:
-                state["base_initialized"] = True
+                target_value = self.quant_config.portfolio.initial_cash * self.quant_config.portfolio.base_ratio
+                lot_size = self.quant_config.portfolio.lot_size
+                desired = int(target_value / float(quote.price)) // lot_size * lot_size
+                state["target_base_shares"] = max(int(state.get("target_base_shares", 0)), desired)
+                remaining = max(int(state["target_base_shares"]) - broker.ledger.total_shares, 0)
+                if remaining > 0:
+                    state["pending_order"] = _serialize_order(
+                        Order("buy", remaining, "initialize_base", "initial_base", pd.Timestamp(quote_time))
+                    )
+                else:
+                    state["base_initialized"] = True
         elif strategy.active_pair is not None or broker.ledger.sellable_shares >= int(state["target_base_shares"]):
             feature_bars = self._feature_bars(trade_date)
             if not feature_bars.empty:

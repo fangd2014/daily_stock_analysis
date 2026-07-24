@@ -1,4 +1,4 @@
-"""Generate a post-close review for the technology portfolio paper account."""
+"""Generate a post-close review for the chip-peak portfolio paper account."""
 
 from __future__ import annotations
 
@@ -68,6 +68,23 @@ def _loss_summary(day_pairs: pd.DataFrame) -> list[dict[str, Any]]:
     ]
 
 
+def _journal_records(frame: pd.DataFrame, columns: tuple[str, ...]) -> list[dict[str, Any]]:
+    """Convert selected journal columns into JSON-safe review evidence."""
+    if frame.empty:
+        return []
+    available = [column for column in columns if column in frame]
+    records = []
+    for values in frame[available].to_dict(orient="records"):
+        records.append(
+            {
+                key: value.isoformat() if isinstance(value, pd.Timestamp) else value
+                for key, value in values.items()
+                if not pd.isna(value)
+            }
+        )
+    return records
+
+
 def generate_daily_review(config_path: str | Path, now: datetime) -> Path:
     """Review all trades for one session and update the optimization queue."""
     portfolio = load_portfolio_config(config_path)
@@ -81,10 +98,13 @@ def generate_daily_review(config_path: str | Path, now: datetime) -> Path:
     pair_frames = []
     mistakes = []
     losses = []
+    operations = []
 
     for account_path in portfolio.account_configs:
         account = load_paper_config(account_path)
         state_dir = Path(account.state_dir)
+        state_path = state_dir / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
         trades = _read_csv(state_dir / "trades.csv", ("timestamp", "signal_time"))
         pairs = _read_csv(state_dir / "pairs.csv", ("entry_time", "exit_time"))
         if not pairs.empty:
@@ -123,6 +143,32 @@ def generate_daily_review(config_path: str | Path, now: datetime) -> Path:
                 mistakes.append({"symbol": account.symbol, "category": category, "count": len(frame)})
         for item in _loss_summary(day_pairs):
             losses.append({"symbol": account.symbol, **item})
+        operations.append(
+            {
+                "symbol": account.symbol,
+                "trades": _journal_records(
+                    day_trades,
+                    (
+                        "timestamp",
+                        "signal_time",
+                        "side",
+                        "quantity",
+                        "price",
+                        "total_fees",
+                        "reason",
+                        "action",
+                        "status",
+                        "message",
+                    ),
+                ),
+                "closed_pairs": _journal_records(
+                    day_pairs,
+                    ("direction", "entry_time", "exit_time", "entry_price", "quantity", "pnl", "exit_reason"),
+                ),
+            }
+        )
+        equity = float(state.get("last_equity", account.initial_cash or 0.0))
+        initial_cash = float(account.initial_cash or 0.0)
         account_rows.append(
             {
                 "symbol": account.symbol,
@@ -132,16 +178,32 @@ def generate_daily_review(config_path: str | Path, now: datetime) -> Path:
                 "pnl": float(day_pairs["pnl"].sum()) if not day_pairs.empty else 0.0,
                 "fees": float(day_trades["total_fees"].sum()) if not day_trades.empty else 0.0,
                 "mistakes": len(rejected) + len(same_bar) + len(invalid_entry),
+                "equity": equity,
+                "return": equity / initial_cash - 1.0 if initial_cash > 0 else 0.0,
+                "cash": float(state.get("cash", initial_cash)),
+                "shares": int(state.get("total_shares", 0)),
+                "sellable_shares": int(state.get("sellable_shares", 0)),
+                "last_price": float(state.get("last_price", 0.0)),
+                "base_initialized": bool(state.get("base_initialized", False)),
+                "last_signal": state.get("last_signal"),
             }
         )
 
     all_pairs = pd.concat(pair_frames, ignore_index=True) if pair_frames else pd.DataFrame()
     advice = _optimization_advice(all_pairs)
+    portfolio_equity = sum(item["equity"] for item in account_rows)
     report_dir = Path(portfolio.report_dir) / "daily_reviews"
     report_dir.mkdir(parents=True, exist_ok=True)
     summary = {
         "date": review_date.strftime("%Y-%m-%d"),
         "accounts": account_rows,
+        "portfolio": {
+            "initial_cash": portfolio.initial_cash,
+            "equity": portfolio_equity,
+            "return": portfolio_equity / portfolio.initial_cash - 1.0,
+            "target_exposure": portfolio.target_exposure,
+        },
+        "operations": operations,
         "mistakes": mistakes,
         "strategy_losses": losses,
         "historical_pair_count": len(all_pairs),
@@ -150,7 +212,11 @@ def generate_daily_review(config_path: str | Path, now: datetime) -> Path:
     }
     report_path = report_dir / f"review_{review_date:%Y-%m-%d}.md"
     lines = [
-        f"# {review_date:%Y-%m-%d} 科技双峰组合复盘",
+        f"# {review_date:%Y-%m-%d} {portfolio.name}复盘",
+        "",
+        f"- 组合权益：¥{portfolio_equity:,.2f}",
+        f"- 累计收益：{portfolio_equity / portfolio.initial_cash - 1.0:.2%}",
+        f"- 目标仓位：{portfolio.target_exposure:.2%}",
         "",
         "| 股票 | 成交 | 完成配对 | 配对盈亏 | 费用 | 规则错误 |",
         "| --- | ---: | ---: | ---: | ---: | ---: |",

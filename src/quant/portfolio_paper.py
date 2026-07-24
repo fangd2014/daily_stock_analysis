@@ -32,8 +32,8 @@ def load_portfolio_config(path: str | Path) -> PortfolioPaperConfig:
     config = PortfolioPaperConfig(**values)
     if not 0 < config.target_exposure < 1:
         raise ValueError("target_exposure must be between 0 and 1")
-    if not 1 <= config.max_positions <= 3:
-        raise ValueError("max_positions must be between 1 and 3")
+    if not 1 <= config.max_positions <= 5:
+        raise ValueError("max_positions must be between 1 and 5")
     if len(config.account_configs) != config.max_positions:
         raise ValueError("portfolio account count must equal max_positions")
 

@@ -1,0 +1,18 @@
+{
+  "symbol": "002368",
+  "name": "太极股份",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "002368.SZ",
+  "initial_cash": 200000,
+  "base_ratio": 0.3,
+  "position_fraction": 1.0,
+  "selection_lower_peak": 13.5628125,
+  "selection_upper_peak": 17.054131944444446,
+  "selection_buy_position_max": 0.45,
+  "max_initial_entry_gap_pct": 0.03,
+  "state_dir": "data/quant_paper/all_a_chip_20260724/002368",
+  "report_dir": "reports/quant_paper/all_a_chip_20260724/002368",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

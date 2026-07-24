@@ -19,6 +19,7 @@ class DataConfig:
     request_pause_seconds: float = 61.0
     minute_chunk_months: int = 6
     max_chunks_per_run: int = 0
+    daily_max_days_per_run: int = 20
     local_path: str = ""
     tdx_endpoints: List[str] = field(default_factory=list)
     tdx_connect_timeout_seconds: float = 2.0
@@ -39,6 +40,18 @@ class PortfolioConfig:
     base_ratio: float = 0.60
     lot_size: int = 100
     max_volume_participation: float = 0.05
+    max_positions: int = 1
+
+
+@dataclass(frozen=True)
+class UniverseConfig:
+    scope: str = "single_symbol"
+    snapshot_dir: str = "data/quant_universe"
+    excluded_symbols: List[str] = field(default_factory=list)
+    exclude_st: bool = True
+    min_listing_days: int = 250
+    min_average_amount: float = 100_000_000.0
+    min_market_cap: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -95,6 +108,7 @@ class OptimizationConfig:
     holdout_start: str = "2025-07-01"
     holdout_end: str = "2026-06-30"
     min_trades_per_year: int = 24
+    research_sample_months: int = 0
     zscore_windows: List[int] = field(default_factory=lambda: [12, 18, 24])
     entry_z_values: List[float] = field(default_factory=lambda: [1.25, 1.50, 1.75, 2.00])
     exit_z_values: List[float] = field(default_factory=lambda: [0.0, 0.25, 0.50])
@@ -104,12 +118,19 @@ class OptimizationConfig:
     chip_low_entry_position_values: List[float] = field(default_factory=lambda: [0.22, 0.28, 0.34])
     chip_high_entry_position_values: List[float] = field(default_factory=lambda: [0.66, 0.72, 0.78])
     chip_exit_position_values: List[float] = field(default_factory=lambda: [0.45, 0.50, 0.55])
+    parameter_selection_mode: str = "rolling_validation"
+    fixed_factor_experiment: str = ""
+    fixed_exposure: float = 0.0
+    fixed_entry_zone: float = 0.0
+    fixed_exit_policy: str = ""
 
 
 @dataclass(frozen=True)
 class AcceptanceConfig:
     annual_return_min: float = 0.30
+    annual_return_target: float = 0.0
     max_drawdown_max: float = 0.25
+    max_drawdown_target: float = 0.0
     calmar_min: float = 2.0
     mean_monthly_return_min: float = 0.025
     median_monthly_return_min: float = -1.0
@@ -125,6 +146,7 @@ class QuantConfig:
     output_dir: str
     data: DataConfig = field(default_factory=DataConfig)
     portfolio: PortfolioConfig = field(default_factory=PortfolioConfig)
+    universe: UniverseConfig = field(default_factory=UniverseConfig)
     costs: CostConfig = field(default_factory=CostConfig)
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
     optimization: OptimizationConfig = field(default_factory=OptimizationConfig)
@@ -155,6 +177,7 @@ def load_quant_config(path: str | Path) -> QuantConfig:
         output_dir=values.get("output_dir", f"reports/quant/{values['symbol'].replace('.', '_')}"),
         data=_build_section(DataConfig, values.get("data")),
         portfolio=_build_section(PortfolioConfig, values.get("portfolio")),
+        universe=_build_section(UniverseConfig, values.get("universe")),
         costs=_build_section(CostConfig, values.get("costs")),
         strategy=_build_section(StrategyConfig, values.get("strategy")),
         optimization=_build_section(OptimizationConfig, values.get("optimization")),
@@ -173,8 +196,10 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError(f"Unsupported fallback data source: {config.data.fallback_source}")
     if config.data.source == "pytdx" and config.data.fallback_source == "local" and not config.data.local_path:
         raise ValueError("data.local_path is required when data.fallback_source is local")
-    if config.data.frequency not in {"1min", "5min", "15min", "30min", "60min"}:
+    if config.data.frequency not in {"1min", "5min", "15min", "30min", "60min", "daily"}:
         raise ValueError(f"Unsupported frequency: {config.data.frequency}")
+    if config.data.frequency == "daily" and config.universe.scope != "all_a":
+        raise ValueError("data.frequency=daily is reserved for all-A portfolio research")
     if config.data.tdx_connect_timeout_seconds <= 0:
         raise ValueError("data.tdx_connect_timeout_seconds must be positive")
     if config.data.tdx_health_ttl_seconds < 0:
@@ -191,6 +216,8 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError("data.tdx_min_bars_per_day_ratio must be in (0, 1]")
     if config.data.tdx_close_tolerance_bps <= 0:
         raise ValueError("data.tdx_close_tolerance_bps must be positive")
+    if config.data.daily_max_days_per_run <= 0:
+        raise ValueError("data.daily_max_days_per_run must be positive")
     if config.data.source == "hybrid":
         if not config.data.tdx_history_start_date:
             raise ValueError("data.tdx_history_start_date is required when data.source is hybrid")
@@ -203,6 +230,25 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError("portfolio.base_ratio must be between 0 and 1")
     if config.portfolio.lot_size <= 0:
         raise ValueError("portfolio.lot_size must be positive")
+    if not 1 <= config.portfolio.max_positions <= 50:
+        raise ValueError("portfolio.max_positions must be between 1 and 50")
+    if config.universe.scope not in {"single_symbol", "all_a"}:
+        raise ValueError(f"Unsupported universe scope: {config.universe.scope}")
+    if config.universe.scope == "all_a" and config.portfolio.max_positions <= 1:
+        raise ValueError("all-A portfolio research requires portfolio.max_positions greater than one")
+    if config.optimization.parameter_selection_mode not in {"rolling_validation", "fixed_preregistered"}:
+        raise ValueError("optimization.parameter_selection_mode is unsupported")
+    if config.optimization.parameter_selection_mode == "fixed_preregistered":
+        if not config.optimization.fixed_factor_experiment or not config.optimization.fixed_exit_policy:
+            raise ValueError("Fixed preregistered research requires factor and exit policy names")
+        if not 0 < config.optimization.fixed_exposure <= 1:
+            raise ValueError("optimization.fixed_exposure must be in (0, 1]")
+        if not 0 < config.optimization.fixed_entry_zone < 1:
+            raise ValueError("optimization.fixed_entry_zone must be in (0, 1)")
+    if config.universe.min_listing_days < 0:
+        raise ValueError("universe.min_listing_days must not be negative")
+    if config.universe.min_average_amount < 0 or config.universe.min_market_cap < 0:
+        raise ValueError("universe liquidity and market-cap limits must not be negative")
     if not 0 < config.strategy.position_fraction <= 1:
         raise ValueError("strategy.position_fraction must be in (0, 1]")
     if config.strategy.exit_z >= config.strategy.entry_z:
@@ -242,6 +288,16 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError("acceptance.min_out_of_sample_months must not be negative")
     if config.acceptance.median_monthly_return_min < -1:
         raise ValueError("acceptance.median_monthly_return_min must be at least -1")
+    if config.acceptance.annual_return_min <= -1:
+        raise ValueError("acceptance.annual_return_min must be greater than -1")
+    if config.acceptance.annual_return_target:
+        if config.acceptance.annual_return_target < config.acceptance.annual_return_min:
+            raise ValueError("acceptance.annual_return_target must not be below annual_return_min")
+    if not 0 < config.acceptance.max_drawdown_max < 1:
+        raise ValueError("acceptance.max_drawdown_max must be between 0 and 1")
+    if config.acceptance.max_drawdown_target:
+        if not 0 < config.acceptance.max_drawdown_target <= config.acceptance.max_drawdown_max:
+            raise ValueError("acceptance.max_drawdown_target must be in (0, max_drawdown_max]")
     holdout_start = pd.Timestamp(config.optimization.holdout_start)
     holdout_end = pd.Timestamp(config.optimization.holdout_end)
     if holdout_end < holdout_start:
@@ -251,3 +307,8 @@ def _validate_config(config: QuantConfig) -> None:
         raise ValueError(
             "Configured holdout has fewer months than acceptance.min_out_of_sample_months"
         )
+    sample_months = config.optimization.research_sample_months
+    if sample_months < 0:
+        raise ValueError("optimization.research_sample_months must not be negative")
+    if sample_months and config.optimization.train_months + config.optimization.validation_months != sample_months:
+        raise ValueError("train_months plus validation_months must equal research_sample_months")

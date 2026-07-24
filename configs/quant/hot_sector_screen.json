@@ -1,0 +1,17 @@
+{
+  "top_n": 10,
+  "hot_sector_count": 5,
+  "max_per_sector": 3,
+  "lookback_days": 60,
+  "calendar_days": 150,
+  "min_sector_members": 5,
+  "min_sector_pct_chg": 0.8,
+  "min_sector_breadth": 0.6,
+  "min_average_amount_20d": 300000000,
+  "min_amount_ratio": 1.0,
+  "max_stock_pct_chg": 7.0,
+  "max_distance_ma20": 0.08,
+  "exclude_st": true,
+  "output_dir": "reports/quant/hot_sector_screen",
+  "cache_dir": "data/quant_cache/daily_chip_screen"
+}

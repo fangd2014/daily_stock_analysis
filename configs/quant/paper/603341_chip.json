@@ -1,0 +1,18 @@
+{
+  "symbol": "603341",
+  "name": "龙旗科技",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "603341.SH",
+  "initial_cash": 200000,
+  "base_ratio": 0.3,
+  "position_fraction": 1.0,
+  "selection_lower_peak": 37.183749999999996,
+  "selection_upper_peak": 41.49541666666666,
+  "selection_buy_position_max": 0.45,
+  "max_initial_entry_gap_pct": 0.03,
+  "state_dir": "data/quant_paper/all_a_chip_20260724/603341",
+  "report_dir": "reports/quant_paper/all_a_chip_20260724/603341",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

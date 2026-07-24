@@ -4,6 +4,7 @@
 *.env
 *.env.local
 .env.*.local
+env.sh
 
 # 测试文件（可能包含敏感配置）
 test_*.py
@@ -37,6 +38,7 @@ venv/
 ENV/
 env/
 .venv/
+Miniconda3-latest-*.sh
 
 # IDE
 .idea/
@@ -72,6 +74,8 @@ verify_*.py
 # ignore claude files
 .claude/
 CLAUDE.md
+.omx/state/skill-active-state.json
+.omx/tmux-hook.json
 
 # ignore static files
 static/

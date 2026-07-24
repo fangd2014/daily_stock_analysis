@@ -85,13 +85,70 @@ python -m src.quant.cli --config configs/quant/quant_research_tdx.json fetch
 
 `data.fallback_source` 可设为 `tushare`、`local` 或 `none`。降级不是静默的，实际使用的数据源和主源错误会写入同目录的 `active_source.json`。PyTDX 使用原始 TCP 协议；若本机网络或代理不允许访问行情节点，应开放相应出站连接，或显式使用上述降级源。Tushare 交叉校验仍需在 `.env` 配置 `TUSHARE_TOKEN`。
 
-36 个月严格样本外研究使用混合数据配置：
+最近三年5分钟行情可使用四源回填器，顺序固定为 Tushare、AKShare、Baostock、tdx2db：
+
+```bash
+python -m src.quant.minute_history_backfill \
+  --config configs/quant/minute_history_3y.json
+
+# 查看持续回填日志和最新统计
+tail -f logs/quant_backfill/minute_history_3y.log
+cat reports/quant/minute_history_3y/minute_history_statistics.md
+```
+
+默认区间为2023-07-24至2026-07-24，统一为5分钟不复权行情，数据池包含当前五股组合及
+`688008.SH`。每个数据源独立缓存，合并时按上述优先级保留同一时间戳的第一条记录；统计报告包含
+K线数、交易日、起止时间、重复、OHLC异常、每日K线众数和完整日比例。Tushare当前账户分钟接口限频
+为每小时1次，因此安装脚本会在每小时11分只下载一个半年分区并原子落盘，任务中断后继续缺失分区：
+
+```bash
+MINUTE_HISTORY_PYTHON="$(command -v python3)" \
+  ./scripts/install_minute_history_backfill_cron.sh
+```
+
+AKShare和Baostock是网络接口，失败会记录真实错误并继续降级；tdx2db不是在线行情源，必须先在通达信
+执行盘后分钟数据下载并配置 `TDX_PATH`，使其目录下存在 `vipdoc/{sh,sz}/fzline/*.lc5`。完整环境探测
+和当前覆盖见[分钟数据报告](docs/MINUTE_DATA_REPORT.md)。
+
+36 个月严格样本外研究使用全 A 股日线组合配置：
 
 ```bash
 python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch
+
+# 首次部署可显式提高单次回填上限；缓存按交易日幂等续传
+python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch --max-days 1200
+
+# 运行固定五股预序组合并用独立验证器重算结果
+python -m src.quant.cli --config configs/quant/quant_research_36m.json prequential
+python -m src.quant.validate_research \
+  --config configs/quant/quant_research_36m.json \
+  --output .omx/specs/autoresearch-chip-peak-quant/result.json
 ```
 
-该配置用 Tushare 分区回填 `2021-07-01` 至 `2024-07-01`，用 PyTDX 提供此后的分钟行情。低频 Tushare 账户每次只回填一个 7 个月分块；未补齐月份会记录在 `hybrid_status.json` 并阻止优化，额度重置后重复执行即可续传。验收期固定为 `2023-07` 至 `2026-06` 共 36 个月，硬门槛为月收益中位数不低于 10%、账户最大回撤不高于 10%。未达到任一条件时报告必须为失败；该门槛不是收益保证。
+该配置按交易日缓存 `2021-07-01` 至 `2026-06-30` 的全 A 股日线和涨跌停价，共约 1210 个交易日；每次默认增量回填 100 日。历史候选池优先使用 Tushare `bak_basic` 快照；当前 Token 无该权限时，系统会用包含退市股票的 `stock_basic` 上市/退市日期和分页完整的 `namechange` 历史名称重建，并在快照中记录实际来源。任何日线横截面、历史成员或名称变更数据不完整都会停止研究，不能拿今天的上市名单回溯替代。
+
+验收期固定为 `2023-07` 至 `2026-06` 共 36 个月。研究器支持以前 18 个月训练和 6 个月验证做逐月参数锁定，也支持完全固定的预注册规格。当前配置使用消融后最简单的固定规则：`chip_low_risk` 因子、低峰区间位置不高于 0.28、60% 总仓位、中峰止盈、6% 单股止损和最长 15 个交易日持有，不允许逐月关闭风控。组合每月从历史全 A 股候选池中选择恰好 5 只当日可买股票，持仓不得超过 5 只；月初不足 5 只时持有现金并在月内继续等待，等待期收益计为零。`688008.SH` 与其他股票使用完全相同的入选规则，但单股结果不能作为最终验收证据。
+
+独立验证器会读取 `research_manifest.json`，逐月核对参数截止日、历史股票池、24 个月样本窗、5 只股票、逐股可买状态、信号与延迟成交时间，以及行情和股票池快照摘要；同时从组合权益重新计算年化收益、月收益和最大回撤，并验证月收益 CSV 与权益完全一致。硬验收要求连续 36 个样本外月、月收益中位数不低于 8%、年化收益率不低于 15%、最大回撤不高于 15%；年化 20% 和最大回撤 10% 是优选目标，不是上下限反向惩罚。8%月收益复利约对应152%年化，只是高难度研究门槛，不是收益保证；验证失败时必须保留失败结论。
+
+截至 2026-07-24，三轮完整研究均未通过收益门槛。最终固定风控规格在 36 个连续月份中得到年化 1.01%、月收益中位数 0.17%、最大回撤 11.35%，仅通过回撤门槛；[完整研究报告](docs/QUANT_RESEARCH_REPORT.md)和 `.omx/specs/autoresearch-chip-peak-quant/result.json` 均保留失败结论。该固定规格是在观察前两轮及同区间消融后确定，因此属于开发样本上的候选，不能视为新的未触碰盲测，也不得据此宣称可稳定实现月收益 8%。
+
+筹码峰策略继续保留，同时新增三套不依赖筹码峰的预注册选股器：时点质量价值、行业中军动量、
+资金流确认反转。估值和资金流按月末交易日缓存，财务指标严格使用公告日不晚于特征截止日的记录；
+三套策略沿用相同的36个月、100万元、固定5股、交易成本和独立验证口径。
+
+```bash
+# 首次拉取36个月的估值、资金流和公告时点财务快照
+python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch-factors
+
+# 运行三套策略并分别生成审计清单、权益曲线和验证结果
+python -m src.quant.cli --config configs/quant/quant_research_36m.json tournament
+```
+
+三套策略均未通过门槛：质量价值年化1.22%、月收益中位数-0.81%、最大回撤24.84%；行业中军动量
+年化-8.17%、月收益中位数-0.56%、最大回撤32.94%；资金流确认反转年化-7.02%、月收益中位数
+-0.58%、最大回撤24.94%。结果保存在
+`reports/quant/chip_peak_all_a_36m_oos_v3_fixed_risk/strategy_tournament/`，失败结果不会被隐藏或替换。
 
 若账户的 `stk_mins` 权限为每小时一次，可安装幂等回填任务：
 
@@ -99,13 +156,13 @@ python -m src.quant.cli --config configs/quant/quant_research_36m.json fetch
 QUANT_BACKFILL_PYTHON="$(command -v python3)" ./scripts/install_quant_backfill_cron.sh
 ```
 
-任务每天 `00:17` 和 `12:17` 运行，以匹配当前 Token 的每天 2 次 `stk_mins` 配额，每次最多请求一个分块；所有历史分区补齐后仍会保留覆盖检查，但不会重复请求已经缓存的 Tushare 分钟数据。
+任务每天 `00:17` 和 `12:17` 运行。全 A 研究配置每次最多补齐 100 个交易日的日线和涨跌停价，已缓存交易日不会重复请求；单股分钟示例仍沿用各自的分钟分区逻辑。
 
 策略支持基于前一交易日趋势和波动率的动态底仓开关，以及高抛/低吸方向和 VWAP Z-score 确认因子。所有信号只使用前一日或当前已收盘 K 线；这些因子必须先通过滚动验证，不能直接根据盲测期表现启用。近期诊断表明动态底仓可显著降低回撤，但当前双峰配对放大仓位后成本后收益为负，因此尚未达到最终目标。
 
 #### 筹码双峰高抛低吸策略
 
-`configs/quant/688008_chip_double_peak.json` 是独立的筹码双峰策略示例。它只使用信号日前 60 个交易日的成交量价格分布，在两个主峰至少相距 8%、峰间谷值不高于较弱峰 70% 时确认双峰。股价位于两峰之间且进入区间下方 28% 时低吸，进入上方 28% 时高抛，回到 50% 中轴平仓。
+`configs/quant/688008_chip_double_peak.json` 仅保留为单股功能示例，不参与最终全 A 组合验证。它只使用信号日前 60 个交易日的成交量价格分布，在两个主峰至少相距 8%、峰间谷值不高于较弱峰 70% 时确认双峰。股价位于两峰之间且进入区间下方 28% 时低吸，进入上方 28% 时高抛，回到 50% 中轴平仓。
 
 ```bash
 python -m src.quant.cli --config configs/quant/688008_chip_double_peak.json fetch
@@ -124,24 +181,21 @@ QUANT_PAPER_CONFIG=configs/quant/688008_chip_double_peak_paper.json \
 
 示例采用 30% 底仓，每组交易使用底仓的 30%（约账户权益的 9%），每日最多一组；单次最长持有 24 根 5 分钟 K 线并于收盘前强制恢复底仓。普通示例的研究验收目标设为年化收益 10%、最大回撤 10%、Calmar 1.2；`quant_research_tdx.json` 另行保留月均 10%、最大回撤 10% 的高门槛，只能由无未来数据的滚动验证与独立盲测判定。所有目标均是模拟研究门槛，不是收益或回撤保证。建议至少运行 6 个月、覆盖 100 组配对交易后再评估参数。
 
-#### 科技龙头双峰组合
+#### 全 A 双峰五股组合
 
-`configs/quant/tech_head_universe.json` 定义 20 只半导体、AI 算力、光通信、消费电子和工业软件龙头候选。筛选器按前 60 个交易日确认双峰，要求股价仍在两峰之间、市值不低于 500 亿元且近 20 日平均成交额不低于 5 亿元。首次选股和调股还要求峰间位置不高于 45%，只从当日允许新建仓的股票中按总市值选择 3 只；日内低吸继续使用更严格的 28% 阈值。某只失去资格时，下一只满足全部条件的股票进入筛选结果补位，持仓池不超过 3 只。
+组合模拟盘从每晚全 A 双峰筛选结果中取排名最靠前的 5 只可买股票，每只分配 20 万元子账户、目标底仓 6 万元，合计 100 万元资金和约 30% 目标仓位。候选不限行业；当前成分来自 `2026-07-22` 的历史筛选结果，后续包括 `688008.SH` 在内的所有股票都按相同条件参与调仓。
 
 ```bash
-# 更新筛选结果
-python -m src.quant.tech_screener --config configs/quant/tech_head_universe.json
-
-# 初始化并查看 100 万元、固定 3 只、目标总仓位 30% 的组合模拟盘
+# 初始化并查看 100 万元、固定 5 只、目标总仓位 30% 的组合模拟盘
 python -m src.quant.portfolio_paper --config configs/quant/tech_chip_portfolio_paper.json init
 python -m src.quant.portfolio_paper --config configs/quant/tech_chip_portfolio_paper.json status
 
-# 使用选股日已满足买入条件的3只股票做三个月无未来数据回测
+# 使用晚间筛选结果前5只做三个月日线近似回测
 python -m src.quant.daily_portfolio_backtest \
-  --selection reports/quant/tech_chip_screen/selection_20260422.json \
+  --selection reports/quant/daily_chip_screen/selection_20260722.json \
   --template-config configs/quant/688008_chip_double_peak.json \
-  --start 2026-04-23 --end 2026-07-22 \
-  --output-dir reports/quant/tech_chip_3m_20260423_20260722
+  --start 2026-07-23 --end 2026-10-22 \
+  --output-dir reports/quant/all_a_chip_5_3m
 
 # 手动生成当日收盘复盘
 python -m src.quant.daily_review \
@@ -157,11 +211,26 @@ QUANT_PAPER_MODULE=src.quant.portfolio_paper \
   QUANT_PAPER_PYTHON="$(command -v python3)" ./scripts/install_quant_paper_cron.sh
 ```
 
-组合模拟盘为每只股票维护独立资金、底仓、T+1 可卖数量和双峰信号，再汇总为 100 万元组合权益。由于 A 股按 100 股整手交易，实际建仓仓位允许在 30% 附近最多偏差 1 个百分点；不会为了凑足仓位买入未通过双峰筛选的股票。持仓池按条件保持 3 只，建议每月执行一次成分复核，避免每日换股。
+组合模拟盘为每只股票维护独立资金、底仓、T+1 可卖数量和双峰信号，再汇总为 100 万元组合权益。由于 A 股按 100 股整手交易，实际建仓仓位允许在 30% 附近最多偏差 1 个百分点；不会为了凑足仓位买入未通过双峰筛选的股票。持仓池保持 5 只且绝不超过 5 只，正式调仓仍需在调仓日重新确认可买条件。首次建仓还会在下一交易日逐个检查涨停、相对昨收涨幅不超过 3%，以及实时价格仍处于选股时双峰的低位买入区；条件失效时等待，不追高成交。
 
-三个月回测采用选股日以前的历史数据确认资格，以当日收盘信号、下一交易日开盘成交作日线近似。完整报告位于 `reports/quant/tech_chip_3m_20260423_20260722/report.md`。日线近似用于验证逻辑，不等同于5分钟模拟盘的精确成交结果。
+三个月回测采用选股日以前的历史数据确认资格，以当日收盘信号、下一交易日开盘成交作日线近似。日线近似用于验证逻辑，不等同于5分钟模拟盘的精确成交结果，也不替代36个月逐月预序验收。
 
-启用 `QUANT_DAILY_REVIEW_MODULE` 后，cron 会在每个工作日 15:25 汇总成交、费用、规则错误和策略内亏损，报告写入 `reports/quant_paper/tech_chip_portfolio/daily_reviews/`。少于30组配对时只收集样本；达到门槛后仅写入 `optimization_queue.json` 作为候选，任何参数都必须通过滚动验证后人工启用，不会因单日盈亏自动修改。
+启用 `QUANT_DAILY_REVIEW_MODULE` 后，cron 会在每个工作日 15:25 汇总成交、费用、规则错误和策略内亏损，报告写入 `reports/quant_paper/all_a_chip_portfolio/daily_reviews/`。少于30组配对时只收集样本；达到门槛后仅写入 `optimization_queue.json` 作为候选，任何参数都必须通过滚动验证后人工启用，不会因单日盈亏自动修改。
+
+DeepSeek复盘任务每天20:00读取上述确定性复盘、逐笔成交、拒单、当前持仓和组合权益，生成操作评价并推送飞书；每周五21:00再汇总当周收益、最大回撤、费用、错误操作和策略内亏损，生成周复盘并推送。模型只提出待验证假设，不会直接修改策略参数。DeepSeek密钥从 `~/.zshrc` 的 `DEEPSEEK_API_KEY` 定向读取，飞书Webhook继续从项目 `.env` 加载。
+
+```bash
+DEEPSEEK_REVIEW_PYTHON="$(command -v python3)" \
+  ./scripts/install_deepseek_review_cron.sh
+
+# 手动验证每日或每周复盘
+/bin/zsh scripts/run_deepseek_review.zsh "$(command -v python3)" \
+  configs/quant/tech_chip_portfolio_paper.json daily
+/bin/zsh scripts/run_deepseek_review.zsh "$(command -v python3)" \
+  configs/quant/tech_chip_portfolio_paper.json weekly
+```
+
+AI复盘报告保存在 `reports/quant_paper/all_a_chip_portfolio/deepseek_reviews/`，每日和每周飞书推送分别按日期幂等，失败时保留报告供下一次重试。
 
 #### 每晚筹码双峰10股筛选与次日指导
 
@@ -181,7 +250,37 @@ DAILY_CHIP_SCREEN_PYTHON="$(command -v python3)" \
   ./scripts/install_daily_chip_screen_cron.sh
 ```
 
-完整任务需要在 `.env` 配置 `TUSHARE_TOKEN`、`DEEPSEEK_API_KEY`（也可复用 `OPENAI_API_KEY`）和 `FEISHU_WEBHOOK_URL`。DeepSeek 每只输出下一交易日操作结论、触发区间、止损失效条件及止盈减仓条件；报告写入 `reports/quant/daily_chip_screen/` 后再推送，Webhook 不会写入报告或日志。同一交易日只成功推送一次，节假日不会重复推送上一交易日结果；飞书失败时会保留指导供重试。该指导仅供模拟盘研究。
+完整任务需要配置 `TUSHARE_TOKEN`、`DEEPSEEK_API_KEY`（也可复用 `OPENAI_API_KEY`）和 `FEISHU_WEBHOOK_URL`。项目配置仍从 `.env` 加载；通过上述脚本安装的20:00定时任务还会从 `~/.zshrc` 中安全提取 `DEEPSEEK_API_KEY` 的 `export` 赋值，但不会执行整个 shell 配置，因此可以复用用户级环境变量而无需把密钥复制到项目文件或 cron 文本。DeepSeek 每只输出下一交易日操作结论、触发区间、止损失效条件及止盈减仓条件；报告写入 `reports/quant/daily_chip_screen/` 后再推送，密钥和 Webhook 不会写入报告或日志。同一交易日只成功推送一次，节假日不会重复推送上一交易日结果；飞书失败时会保留指导供重试。该指导仅供模拟盘研究。
+
+#### 每晚热门板块中军短线筛选
+
+`configs/quant/hot_sector_screen.json` 是独立于五股组合的短线观察列表。任务先要求行业当日平均上涨至少
+0.8%、上涨家数占比至少60%、成交额活跃且20日趋势向上，再从热度前5个行业中寻找成交额位于板块
+前40%的中军。个股还必须满足20日均额不低于3亿元、放量、`close > MA20 > MA60`、主力净流入为正、
+涨幅不超过7%且距离MA20不超过8%。每行业最多3只，全市场最多10只；不足10只时保留现金和观察，
+不会用不合格股票补位。
+
+```bash
+# 只生成确定性筛选报告
+python -m src.quant.hot_sector_screener \
+  --config configs/quant/hot_sector_screen.json screen
+
+# DeepSeek生成1至5个交易日操作计划并推送飞书
+/bin/zsh scripts/run_hot_sector_screen.zsh \
+  "$(command -v python3)" configs/quant/hot_sector_screen.json
+
+# 安装工作日20:05任务
+HOT_SECTOR_SCREEN_PYTHON="$(command -v python3)" \
+  ./scripts/install_hot_sector_screen_cron.sh
+```
+
+推送内容包含板块热度、选股理由、观察买入区、高开3%放弃条件、约5%硬止损、6%/10%两档止盈和
+最长5日持有期；板块跌出热度榜即取消计划。DeepSeek密钥由启动脚本从 `~/.zshrc` 定向读取，飞书
+Webhook从 `.env` 读取，成功推送按交易日幂等。2026-07-24真实试跑因市场普跌没有合格行业，系统已
+正确推送空名单和观望结论，没有强行凑票。
+
+筛选过程会在控制台打印数据规模、板块门槛结果、热门板块排名、个股淘汰原因汇总、最终候选排名、
+DeepSeek进度和飞书状态。定时任务的完整输出保存在 `logs/quant_screen/hot_sector_screen.log`。
 
 ### T+0 模拟盘
 

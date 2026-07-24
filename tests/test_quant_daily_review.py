@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.quant.daily_review import _optimization_advice, generate_daily_review
+from src.quant.deepseek_review import build_weekly_context, run_deepseek_review
 
 
 def _write_review_config(tmp_path: Path) -> Path:
@@ -127,3 +128,48 @@ def test_optimization_requires_30_pairs_and_only_enqueues_candidates():
         "候选优化：将高抛位置由 72% 提高到 78%，并执行滚动验证。",
         "候选优化：将峰间谷值上限由 70% 收紧至 60%，过滤不稳定双峰。",
     ]
+
+
+class RecordingReviewGenerator:
+    model = "test-review-model"
+
+    def __init__(self):
+        self.calls = []
+
+    def analyze(self, review_type, context):
+        self.calls.append((review_type, context))
+        return f"{review_type} grounded review"
+
+
+class RecordingReviewNotifier:
+    def __init__(self):
+        self.messages = []
+
+    def send(self, title, content):
+        self.messages.append((title, content))
+        return True
+
+
+def test_deepseek_daily_and_weekly_reviews_are_pushed_idempotently(tmp_path):
+    config_path = _write_review_config(tmp_path)
+    generator = RecordingReviewGenerator()
+    notifier = RecordingReviewNotifier()
+    friday = datetime.fromisoformat("2026-07-24T21:00:00+08:00")
+
+    daily = run_deepseek_review(config_path, "daily", generator, notifier, friday)
+    weekly_context = build_weekly_context(config_path, friday)
+    weekly = run_deepseek_review(config_path, "weekly", generator, notifier, friday)
+    repeated_daily = run_deepseek_review(config_path, "daily", generator, notifier, friday)
+    repeated_weekly = run_deepseek_review(config_path, "weekly", generator, notifier, friday)
+
+    assert daily["status"] == "ok"
+    assert weekly["status"] == "ok"
+    assert repeated_daily["reason"] == "review_already_pushed"
+    assert repeated_weekly["reason"] == "review_already_pushed"
+    assert weekly_context["week_start"] == "2026-07-20"
+    assert weekly_context["portfolio"]["weekly_return"] == 0.0
+    assert [call[0] for call in generator.calls] == ["daily", "weekly"]
+    assert len(notifier.messages) == 2
+    report_dir = tmp_path / "portfolio_reports" / "deepseek_reviews"
+    assert (report_dir / "daily_2026-07-24.md").exists()
+    assert (report_dir / "weekly_2026-07-24.md").exists()

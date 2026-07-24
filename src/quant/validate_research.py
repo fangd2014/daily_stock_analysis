@@ -11,7 +11,8 @@ from typing import Any
 import pandas as pd
 
 from .config import QuantConfig, load_quant_config
-from .metrics import daily_equity
+from .metrics import daily_equity, monthly_returns
+from .research_protocol import validate_prequential_manifest
 
 
 @dataclass(frozen=True)
@@ -20,60 +21,100 @@ class ResearchValidationResult:
     passed: bool
     observed_out_of_sample_months: int
     required_out_of_sample_months: int
+    annual_return: float
+    required_annual_return: float
+    target_annual_return: float
     median_monthly_return: float
     required_median_monthly_return: float
     max_drawdown: float
     maximum_allowed_drawdown: float
+    target_max_drawdown: float
     missing_months: list[str]
     failures: list[str]
     summary: str
 
 
-def _strict_drawdown(equity: pd.DataFrame, initial_equity: float) -> float:
+def _daily_with_opening_equity(equity: pd.DataFrame, initial_equity: float) -> pd.Series:
     daily = daily_equity(equity)
     if daily.empty:
-        return 1.0
+        return daily
     opening_index = daily.index[0].to_period("M").start_time - pd.Timedelta(days=1)
-    daily = pd.concat([pd.Series([float(initial_equity)], index=[opening_index]), daily])
+    return pd.concat([pd.Series([float(initial_equity)], index=[opening_index]), daily])
+
+
+def _strict_drawdown(equity: pd.DataFrame, initial_equity: float) -> float:
+    daily = _daily_with_opening_equity(equity, initial_equity)
+    if daily.empty:
+        return 1.0
     return abs(float((daily / daily.cummax() - 1.0).min()))
+
+
+def _strict_annual_return(equity: pd.DataFrame, initial_equity: float) -> float:
+    daily = _daily_with_opening_equity(equity, initial_equity)
+    if len(daily) < 2 or daily.iloc[0] <= 0 or daily.iloc[-1] <= 0:
+        return -1.0
+    elapsed_days = max((daily.index[-1] - daily.index[0]).days, 1)
+    return float((daily.iloc[-1] / daily.iloc[0]) ** (365.25 / elapsed_days) - 1.0)
 
 
 def validate_research_artifacts(
     config: QuantConfig,
     output_dir: str | Path | None = None,
 ) -> ResearchValidationResult:
-    """Recompute the three hard targets from saved holdout artifacts."""
+    """Recompute sample length, annual return, and drawdown from saved artifacts."""
     root = Path(output_dir or config.output_dir)
     monthly_path = root / "monthly_returns.csv"
     equity_path = root / "equity.csv"
+    manifest_path = root / "research_manifest.json"
     failures = []
     if not monthly_path.exists():
         failures.append("monthly_returns_missing")
     if not equity_path.exists():
         failures.append("equity_missing")
+    if not manifest_path.exists():
+        failures.append("research_manifest_missing")
     if failures:
         return ResearchValidationResult(
             status="failed",
             passed=False,
             observed_out_of_sample_months=0,
             required_out_of_sample_months=config.acceptance.min_out_of_sample_months,
+            annual_return=-1.0,
+            required_annual_return=config.acceptance.annual_return_min,
+            target_annual_return=config.acceptance.annual_return_target,
             median_monthly_return=0.0,
             required_median_monthly_return=config.acceptance.median_monthly_return_min,
             max_drawdown=1.0,
             maximum_allowed_drawdown=config.acceptance.max_drawdown_max,
+            target_max_drawdown=config.acceptance.max_drawdown_target,
             missing_months=[],
             failures=failures,
             summary="Required holdout artifacts are missing.",
         )
 
-    monthly = pd.read_csv(monthly_path, dtype={"month": str})
-    if not {"month", "return"}.issubset(monthly.columns):
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        manifest = {}
+        failures.append("research_manifest_invalid_json")
+    if isinstance(manifest, dict):
+        failures.extend(validate_prequential_manifest(config, manifest))
+    else:
+        failures.append("research_manifest_invalid_root")
+
+    reported_monthly = pd.read_csv(monthly_path, dtype={"month": str})
+    if not {"month", "return"}.issubset(reported_monthly.columns):
         raise ValueError("monthly_returns.csv must contain month and return columns")
-    monthly["return"] = pd.to_numeric(monthly["return"], errors="coerce")
-    monthly = monthly.dropna(subset=["month", "return"])
-    if monthly["month"].duplicated().any():
+    reported_monthly["return"] = pd.to_numeric(reported_monthly["return"], errors="coerce")
+    reported_monthly = reported_monthly.dropna(subset=["month", "return"])
+    if reported_monthly["month"].duplicated().any():
         failures.append("duplicate_months")
-    observed_months = sorted(monthly["month"].unique().tolist())
+    equity = pd.read_csv(equity_path)
+    if not {"datetime", "equity"}.issubset(equity.columns):
+        raise ValueError("equity.csv must contain datetime and equity columns")
+    recomputed_monthly = monthly_returns(equity, config.portfolio.initial_cash)
+    recomputed_monthly["month"] = recomputed_monthly["month"].astype(str)
+    observed_months = sorted(recomputed_monthly["month"].unique().tolist())
     expected_months = [
         str(period)
         for period in pd.period_range(
@@ -88,13 +129,27 @@ def validate_research_artifacts(
         failures.append("missing_out_of_sample_months")
     if unexpected_months:
         failures.append("returns_outside_holdout")
+    reported = reported_monthly.sort_values("month").reset_index(drop=True)
+    recomputed = recomputed_monthly.sort_values("month").reset_index(drop=True)
+    monthly_matches_equity = (
+        reported["month"].tolist() == recomputed["month"].tolist()
+        and len(reported) == len(recomputed)
+        and pd.Series(reported["return"] - recomputed["return"]).abs().le(1e-10).all()
+    )
+    if not monthly_matches_equity:
+        failures.append("monthly_returns_equity_mismatch")
     month_count = len(observed_months)
-    median_return = float(monthly["return"].median()) if not monthly.empty else 0.0
-    equity = pd.read_csv(equity_path)
+    median_return = float(recomputed_monthly["return"].median()) if not recomputed_monthly.empty else 0.0
+    annual_return = _strict_annual_return(equity, config.portfolio.initial_cash)
     max_drawdown = _strict_drawdown(equity, config.portfolio.initial_cash)
     if month_count < config.acceptance.min_out_of_sample_months:
         failures.append("insufficient_out_of_sample_months")
-    if median_return < config.acceptance.median_monthly_return_min:
+    if annual_return < config.acceptance.annual_return_min:
+        failures.append("annual_return_below_target")
+    if (
+        config.acceptance.median_monthly_return_min > -1
+        and median_return < config.acceptance.median_monthly_return_min
+    ):
         failures.append("median_monthly_return_below_target")
     if max_drawdown > config.acceptance.max_drawdown_max:
         failures.append("maximum_drawdown_above_limit")
@@ -109,10 +164,14 @@ def validate_research_artifacts(
         passed=passed,
         observed_out_of_sample_months=month_count,
         required_out_of_sample_months=config.acceptance.min_out_of_sample_months,
+        annual_return=annual_return,
+        required_annual_return=config.acceptance.annual_return_min,
+        target_annual_return=config.acceptance.annual_return_target,
         median_monthly_return=median_return,
         required_median_monthly_return=config.acceptance.median_monthly_return_min,
         max_drawdown=max_drawdown,
         maximum_allowed_drawdown=config.acceptance.max_drawdown_max,
+        target_max_drawdown=config.acceptance.max_drawdown_target,
         missing_months=missing_months,
         failures=failures,
         summary=summary,

@@ -1,4 +1,4 @@
-"""Three-month daily approximation backtest for a selected technology portfolio."""
+"""Three-month daily approximation backtest for a selected five-stock portfolio."""
 
 from __future__ import annotations
 
@@ -167,9 +167,9 @@ def run_backtest(
 ) -> dict[str, Any]:
     """Run a causal daily approximation for the three names selected before the test period."""
     selection = json.loads(Path(selection_path).read_text(encoding="utf-8"))
-    selected = selection["selected"]
-    if len(selected) != 3:
-        raise ValueError("Backtest selection must contain exactly three stocks")
+    selected = selection["selected"][:5]
+    if len(selected) != 5:
+        raise ValueError("Backtest selection must contain at least five stocks")
     if any(not item.get("buy_ready", False) for item in selected):
         raise ValueError("Every initial constituent must satisfy the selection-day buy condition")
     setup_env()
@@ -179,7 +179,7 @@ def run_backtest(
     api = create_tushare_pro_api(token)
     template = load_quant_config(template_config_path)
     warmup_start = (pd.Timestamp(start_date) - pd.Timedelta(days=150)).strftime("%Y-%m-%d")
-    capital = [333_333.0, 333_333.0, 333_334.0]
+    capital = [200_000.0] * 5
     strategy_results: dict[str, BacktestResult] = {}
     benchmark_results: dict[str, BacktestResult] = {}
 
@@ -257,7 +257,7 @@ def run_backtest(
     else:
         conclusion = "证据不足/未通过"
     lines = [
-        "# 科技龙头筹码双峰策略三个月回测报告",
+        "# 全A筹码双峰五股策略三个月回测报告",
         "",
         f"回测区间：{start_date} 至 {end_date}",
         f"选股时点：{selection['as_of']}（仅使用该日及以前的数据）",

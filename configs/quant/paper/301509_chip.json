@@ -1,0 +1,14 @@
+{
+  "symbol": "301509",
+  "name": "金凯生科",
+  "start_date": "2026-07-24",
+  "quant_config": "configs/quant/688008_chip_double_peak.json",
+  "quant_symbol": "301509.SZ",
+  "initial_cash": 200000,
+  "base_ratio": 0.3,
+  "position_fraction": 1.0,
+  "state_dir": "data/quant_paper/all_a_chip_buy_ready_5/301509",
+  "report_dir": "reports/quant_paper/all_a_chip_buy_ready_5/301509",
+  "timezone": "Asia/Shanghai",
+  "quote_source": "tencent"
+}

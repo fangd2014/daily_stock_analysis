@@ -3,10 +3,12 @@
   "validation_mode": "mission-validator-script",
   "completion_artifact_path": ".omx/specs/autoresearch-chip-peak-quant/result.json",
   "mission_validator_command": "python -m src.quant.validate_research --config configs/quant/quant_research_36m.json --output .omx/specs/autoresearch-chip-peak-quant/result.json",
-  "output_artifact_path": "reports/quant/chip_peak_36m_oos/report.md",
+  "output_artifact_path": "reports/quant/chip_peak_all_a_36m_oos_v3_fixed_risk/report.md",
   "status": "running",
-  "phase": "historical_data_backfill_and_factor_diagnostics",
-  "data_status": "37 historical month partitions pending; Tushare quota is 2 stk_mins calls per day",
+  "acceptance_target": "36 OOS months; median monthly return >= 8%; annual return >= 15%; maximum drawdown <= 15% (10% preferred)",
+  "phase": "three_strategy_tournament_failed_hot_sector_forward_monitoring",
+  "data_status": "1210 of 1210 all-A daily and price-limit sessions cached; 36 daily_basic and moneyflow cutoffs plus point-in-time financial histories for 350 value-prefiltered symbols are cached",
+  "protocol_status": "Chip-peak and all three preregistered alternative selectors failed the 36-month return gates; the nightly hot-sector commander strategy is deployed only for forward paper monitoring",
   "next_scheduled_backfill": "2026-07-24T00:17:00+08:00",
-  "updated_at": "2026-07-23T22:20:09+08:00"
+  "updated_at": "2026-07-24T20:30:00+08:00"
 }

@@ -135,10 +135,11 @@ def test_selection_refuses_to_fill_a_slot_with_an_ineligible_name():
         select_candidates([base, replace(base, symbol="B")], _screener_config())
 
 
-def test_checked_in_portfolio_uses_three_accounts_and_one_million_capital():
+def test_checked_in_portfolio_uses_five_accounts_and_one_million_capital():
     config = load_portfolio_config("configs/quant/tech_chip_portfolio_paper.json")
 
-    assert len(config.account_configs) == 3
+    assert len(config.account_configs) == 5
+    assert config.max_positions == 5
     assert config.initial_cash == 1_000_000
     assert config.target_exposure == 0.3
 

@@ -1,34 +1,34 @@
 {
-  "symbol": "688008.SH",
-  "name": "Chip-Peak Quant Research - 36M Out-of-Sample",
+  "symbol": "ALL_A_PORTFOLIO",
+  "name": "All-A Chip-Peak Five-Stock Portfolio - 36M Out-of-Sample",
   "start_date": "2021-07-01",
   "end_date": "2026-06-30",
-  "output_dir": "reports/quant/chip_peak_36m_oos",
+  "output_dir": "reports/quant/chip_peak_all_a_36m_oos_v3_fixed_risk",
   "data": {
-    "source": "hybrid",
+    "source": "tushare",
     "fallback_source": "none",
-    "frequency": "5min",
-    "cache_dir": "data/quant_cache",
-    "request_pause_seconds": 61,
-    "minute_chunk_months": 7,
-    "max_chunks_per_run": 1,
-    "tdx_history_start_date": "2024-07-02",
-    "tdx_endpoints": [],
-    "tdx_connect_timeout_seconds": 2.0,
-    "tdx_health_ttl_seconds": 3600,
-    "tdx_probe_workers": 12,
-    "tdx_page_size": 800,
-    "tdx_max_pages": 500,
-    "tdx_min_complete_day_ratio": 0.95,
-    "tdx_min_bars_per_day_ratio": 0.8,
-    "tdx_close_tolerance_bps": 20,
-    "tdx_require_cross_validation": true
+    "frequency": "daily",
+    "cache_dir": "data/quant_daily_cache",
+    "request_pause_seconds": 0.2,
+    "minute_chunk_months": 6,
+    "max_chunks_per_run": 0,
+    "daily_max_days_per_run": 100
   },
   "portfolio": {
     "initial_cash": 1000000,
     "base_ratio": 0.3,
     "lot_size": 100,
-    "max_volume_participation": 0.03
+    "max_volume_participation": 0.03,
+    "max_positions": 5
+  },
+  "universe": {
+    "scope": "all_a",
+    "snapshot_dir": "data/quant_universe/all_a",
+    "excluded_symbols": [],
+    "exclude_st": true,
+    "min_listing_days": 250,
+    "min_average_amount": 100000000,
+    "min_market_cap": 0
   },
   "costs": {
     "commission_rate": 0.00025,
@@ -41,11 +41,11 @@
     "strategy_type": "chip_double_peak",
     "position_fraction": 0.3,
     "stop_loss_pct": 0.012,
-    "max_holding_bars": 24,
+    "max_holding_bars": 10,
     "max_pairs_per_day": 1,
-    "no_entry_before": "09:45",
-    "no_entry_after": "14:20",
-    "force_exit_at": "14:50",
+    "no_entry_before": "00:00",
+    "no_entry_after": "23:59",
+    "force_exit_at": "23:59",
     "daily_loss_limit": 0.004,
     "daily_trend_limit": 0.06,
     "daily_volatility_limit": 0.04,
@@ -62,19 +62,27 @@
     "chip_breakout_buffer_pct": 0.01
   },
   "optimization": {
-    "train_months": 12,
+    "train_months": 18,
     "validation_months": 6,
-    "step_months": 6,
+    "step_months": 1,
+    "research_sample_months": 24,
     "holdout_start": "2023-07-01",
     "holdout_end": "2026-06-30",
-    "min_trades_per_year": 24
+    "min_trades_per_year": 24,
+    "parameter_selection_mode": "fixed_preregistered",
+    "fixed_factor_experiment": "chip_low_risk",
+    "fixed_exposure": 0.6,
+    "fixed_entry_zone": 0.28,
+    "fixed_exit_policy": "mid_peak_stop_6"
   },
   "acceptance": {
-    "annual_return_min": 0.0,
-    "max_drawdown_max": 0.1,
+    "annual_return_min": 0.15,
+    "annual_return_target": 0.2,
+    "max_drawdown_max": 0.15,
+    "max_drawdown_target": 0.1,
     "calmar_min": 0.0,
     "mean_monthly_return_min": -1.0,
-    "median_monthly_return_min": 0.1,
+    "median_monthly_return_min": 0.08,
     "min_out_of_sample_months": 36
   }
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -145,6 +146,43 @@ def test_base_purchase_is_queued_filled_and_settled_next_day(tmp_path):
     assert duplicate["reason"] == "duplicate_bucket"
     assert next_day["shares"] == 6_000
     assert next_day["sellable_shares"] == 6_000
+
+
+def test_initial_base_waits_when_next_session_is_no_longer_buy_ready(tmp_path):
+    quote = replace(make_quote("20260721093000", price=104.0), pre_close=100.0)
+    config = replace(
+        make_config(tmp_path),
+        selection_lower_peak=90.0,
+        selection_upper_peak=110.0,
+        selection_buy_position_max=0.45,
+        max_initial_entry_gap_pct=0.03,
+    )
+    service = PaperTradingService(config, SequenceQuoteProvider([quote]))
+    service._refresh_daily_history = lambda state, today: None
+
+    result = service.tick(datetime(2026, 7, 21, 9, 30))
+
+    assert result["shares"] == 0
+    assert result["pending_order"] is None
+    assert result["last_signal"]["initial_base_allowed"] is False
+    assert result["last_signal"]["reason"] == "entry_gap_too_high"
+
+
+def test_initial_base_waits_above_selected_chip_buy_zone(tmp_path):
+    quote = replace(make_quote("20260721093000", price=100.0), pre_close=100.0)
+    config = replace(
+        make_config(tmp_path),
+        selection_lower_peak=90.0,
+        selection_upper_peak=110.0,
+        selection_buy_position_max=0.45,
+    )
+    service = PaperTradingService(config, SequenceQuoteProvider([quote]))
+    service._refresh_daily_history = lambda state, today: None
+
+    result = service.tick(datetime(2026, 7, 21, 9, 30))
+
+    assert result["pending_order"] is None
+    assert result["last_signal"]["reason"] == "price_above_selection_buy_zone"
 
 
 def test_stale_quote_is_rejected_without_initializing_state(tmp_path):
