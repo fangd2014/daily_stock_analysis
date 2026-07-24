@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from src.config import setup_env
+from src.config import get_dotenv_value, setup_env
 
 from .daily_review import _journal_records, _read_csv, generate_daily_review
 from .paper_config import load_paper_config
@@ -37,7 +37,7 @@ class DeepSeekReviewGenerator:
         setup_env()
         from openai import OpenAI
 
-        api_key = os.getenv("DEEPSEEK_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
+        api_key = get_dotenv_value("DEEPSEEK_API_KEY")
         if not api_key or api_key.startswith("your_"):
             raise ValueError("DEEPSEEK_API_KEY is required for paper-trading review")
         base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").strip()

@@ -17,15 +17,23 @@ from dotenv import load_dotenv, dotenv_values
 from dataclasses import dataclass, field
 
 
-def setup_env():
-    """初始化环境变量（支持从 .env 加载）"""
-    # src/config.py -> src/ -> root
+def get_env_path() -> Path:
+    """Return the configured dotenv path without reading shell profiles."""
     env_file = os.getenv("ENV_FILE")
     if env_file:
-        env_path = Path(env_file)
-    else:
-        env_path = Path(__file__).parent.parent / '.env'
-    load_dotenv(dotenv_path=env_path)
+        return Path(env_file)
+    return Path(__file__).parent.parent / ".env"
+
+
+def setup_env():
+    """初始化环境变量（支持从 .env 加载）"""
+    load_dotenv(dotenv_path=get_env_path())
+
+
+def get_dotenv_value(name: str) -> str:
+    """Read one value directly from .env so process or shell exports cannot override it."""
+    value = dotenv_values(get_env_path()).get(name)
+    return str(value).strip() if value is not None else ""
 
 
 @dataclass

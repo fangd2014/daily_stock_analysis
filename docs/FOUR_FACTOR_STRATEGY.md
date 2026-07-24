@@ -82,10 +82,9 @@ TickDB Skill 安装命令：
 npx clawhub@latest install tickdb-market-data
 ```
 
-正式全市场任务必须配置 `TICKDB_API_KEY`。客户端按“显式参数、进程环境变量/`.env`、`~/.zshrc`、
-`~/zshrc`”的顺序查找。读取 shell 配置时只接受字面量赋值，不执行配置文件、命令替换或其他 shell
-语句；也不会把 Key 写入缓存。上述位置都未配置时，只允许 TickDB 官方试用名单，不会把试用名单
-冒充全市场股票池。可通过 `TICKDB_ZSHRC_PATH` 指定其他只读配置路径。
+正式全市场任务必须在项目 `.env` 配置 `TICKDB_API_KEY`，舆情语义计算必须在同一文件配置
+`DEEPSEEK_API_KEY`。量化任务不从进程环境变量、`~/.zshrc` 或其他Shell配置读取这两个密钥，也不会
+把Key写入缓存。未配置正式TickDB Key时，只允许TickDB官方试用名单，不会把试用名单冒充全市场股票池。
 
 ```bash
 # 拉取并固化 TickDB 时点快照

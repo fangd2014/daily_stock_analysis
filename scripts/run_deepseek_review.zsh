@@ -1,7 +1,6 @@
 #!/bin/zsh
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-source "${SCRIPT_DIR}/load_deepseek_env.zsh"
 
 set -eu
 

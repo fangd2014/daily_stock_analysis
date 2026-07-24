@@ -13,7 +13,7 @@ from typing import Any, Optional, Protocol
 
 import pandas as pd
 
-from src.config import setup_env
+from src.config import get_dotenv_value, setup_env
 from src.tushare_client import create_tushare_pro_api
 
 from .config import StrategyConfig
@@ -143,7 +143,7 @@ class DeepSeekGuidanceGenerator:
         setup_env()
         from openai import OpenAI
 
-        api_key = os.getenv("DEEPSEEK_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
+        api_key = get_dotenv_value("DEEPSEEK_API_KEY")
         if not api_key or api_key.startswith("your_"):
             raise ValueError("DEEPSEEK_API_KEY is required for next-session guidance")
         base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").strip()

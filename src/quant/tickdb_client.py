@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import os
-import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Iterable
 
 import requests
 
-from src.config import setup_env
+from src.config import get_dotenv_value
 
 
 TRIAL_A_SHARE_SYMBOLS = frozenset(
@@ -27,32 +24,10 @@ TRIAL_A_SHARE_SYMBOLS = frozenset(
         "002594.SZ",
     }
 )
-TICKDB_KEY_ASSIGNMENT = re.compile(
-    r"^\s*(?:export\s+)?TICKDB_API_KEY\s*=\s*(['\"]?)([A-Za-z0-9._-]+)\1\s*(?:#.*)?$"
-)
 
 
 class TickDBError(RuntimeError):
     """Raised when TickDB authentication, transport, or response validation fails."""
-
-
-def load_tickdb_key_from_shell() -> str:
-    """Read a literal TickDB key assignment without executing a shell profile."""
-    configured_path = os.getenv("TICKDB_ZSHRC_PATH", "").strip()
-    if configured_path:
-        candidates = [Path(configured_path).expanduser()]
-    else:
-        candidates = [Path.home() / ".zshrc", Path.home() / "zshrc"]
-    for path in candidates:
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except (FileNotFoundError, OSError, UnicodeError):
-            continue
-        for line in reversed(lines):
-            match = TICKDB_KEY_ASSIGNMENT.fullmatch(line)
-            if match:
-                return match.group(2)
-    return ""
 
 
 @dataclass(frozen=True)
@@ -87,8 +62,7 @@ class TickDBClient:
     def _formal_key(self) -> str:
         if self.explicit_api_key:
             return self.explicit_api_key
-        setup_env()
-        return os.getenv("TICKDB_API_KEY", "").strip() or load_tickdb_key_from_shell()
+        return get_dotenv_value("TICKDB_API_KEY")
 
     def _trial_key(self, symbols: list[str]) -> str:
         unsupported = sorted(set(symbols) - TRIAL_A_SHARE_SYMBOLS)

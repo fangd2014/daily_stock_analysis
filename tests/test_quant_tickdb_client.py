@@ -6,11 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 import requests
 
-from src.quant.tickdb_client import (
-    TickDBClient,
-    TickDBError,
-    load_tickdb_key_from_shell,
-)
+from src.quant.tickdb_client import TickDBClient, TickDBError
 from src.quant.tickdb_factor_snapshot import TickDBFactorSnapshotStore, TickDBSnapshotConfig
 
 
@@ -54,8 +50,10 @@ def test_formal_key_takes_precedence_and_is_sent_only_as_a_header(monkeypatch):
 
 
 def test_trial_key_is_ephemeral_and_rejects_symbols_outside_trial_list(tmp_path, monkeypatch):
-    monkeypatch.delenv("TICKDB_API_KEY", raising=False)
-    monkeypatch.setenv("TICKDB_ZSHRC_PATH", str(tmp_path / "missing-zshrc"))
+    env_file = tmp_path / ".env"
+    env_file.write_text("TICKDB_API_KEY=\n", encoding="utf-8")
+    monkeypatch.setenv("ENV_FILE", str(env_file))
+    monkeypatch.setenv("TICKDB_API_KEY", "ignored-process-key")
     session = FakeSession()
     client = TickDBClient(session=session)
 
@@ -77,24 +75,21 @@ def test_api_error_code_is_not_silently_accepted():
         client.get_ticker("688008.SH")
 
 
-def test_formal_key_is_loaded_from_zshrc_without_executing_it(tmp_path, monkeypatch):
-    marker = tmp_path / "must-not-exist"
-    profile = tmp_path / ".zshrc"
-    profile.write_text(
-        "export TICKDB_API_KEY=$(touch must-not-exist)\n"
-        "export TICKDB_API_KEY='formal-key-from-zshrc'\n",
-        encoding="utf-8",
-    )
-    monkeypatch.delenv("TICKDB_API_KEY", raising=False)
-    monkeypatch.setenv("TICKDB_ZSHRC_PATH", str(profile))
+def test_formal_key_is_loaded_only_from_dotenv(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("TICKDB_API_KEY=formal-key-from-dotenv\n", encoding="utf-8")
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".zshrc").write_text("export TICKDB_API_KEY=key-from-zshrc\n", encoding="utf-8")
+    monkeypatch.setenv("ENV_FILE", str(env_file))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("TICKDB_API_KEY", "ignored-process-key")
     session = FakeSession()
 
-    assert load_tickdb_key_from_shell() == "formal-key-from-zshrc"
     TickDBClient(session=session).get_ticker("688008.SH")
 
     assert len(session.calls) == 1
-    assert session.calls[0][1]["headers"] == {"X-API-Key": "formal-key-from-zshrc"}
-    assert not marker.exists()
+    assert session.calls[0][1]["headers"] == {"X-API-Key": "formal-key-from-dotenv"}
 
 
 class FakeTickDBClient:

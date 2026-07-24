@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.config import setup_env
+from src.config import get_dotenv_value, setup_env
 from src.search_service import get_search_service
 
 from .four_factor_strategy import (
@@ -168,7 +168,7 @@ def _classify_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     setup_env()
     from openai import OpenAI
 
-    key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    key = get_dotenv_value("DEEPSEEK_API_KEY")
     if not key:
         raise ValueError("DEEPSEEK_API_KEY is required to classify news")
     client = OpenAI(

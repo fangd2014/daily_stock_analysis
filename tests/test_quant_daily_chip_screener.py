@@ -12,6 +12,7 @@ import pytest
 
 from src.quant.daily_chip_screener import (
     DailyChipScreenConfig,
+    DeepSeekGuidanceGenerator,
     FeishuGuidanceNotifier,
     _main_net_inflow,
     evaluate_market,
@@ -237,18 +238,39 @@ def test_feishu_notifier_sends_interactive_card_without_exposing_webhook(monkeyp
     assert webhook not in str(captured["payload"])
 
 
-def test_cron_runner_loads_deepseek_key_from_zshrc(tmp_path):
+def test_deepseek_generator_loads_key_only_from_dotenv(tmp_path, monkeypatch):
+    captured = {}
+
+    class FakeOpenAI:
+        def __init__(self, api_key, base_url):
+            captured.update({"api_key": api_key, "base_url": base_url})
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY=key-from-dotenv\n", encoding="utf-8")
     home = tmp_path / "home"
     home.mkdir()
-    (home / ".zshrc").write_text(
-        "export DEEPSEEK_API_KEY=test-from-zshrc```\n",
-        encoding="utf-8",
-    )
+    (home / ".zshrc").write_text("export DEEPSEEK_API_KEY=key-from-zshrc\n", encoding="utf-8")
+    monkeypatch.setenv("ENV_FILE", str(env_file))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ignored-process-key")
+    monkeypatch.delenv("DEEPSEEK_BASE_URL", raising=False)
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+
+    DeepSeekGuidanceGenerator()
+
+    assert captured["api_key"] == "key-from-dotenv"
+    assert captured["base_url"] == "https://api.deepseek.com/v1"
+
+
+def test_cron_runner_does_not_import_deepseek_key_from_zshrc(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".zshrc").write_text("export DEEPSEEK_API_KEY=key-from-zshrc\n", encoding="utf-8")
     probe = tmp_path / "probe.sh"
     probe.write_text(
         "#!/bin/sh\n"
-        "test \"$DEEPSEEK_API_KEY\" = test-from-zshrc || exit 9\n"
-        "printf 'key-loaded\\n'\n",
+        "test -z \"${DEEPSEEK_API_KEY:-}\" || exit 9\n"
+        "printf 'shell-key-not-loaded\\n'\n",
         encoding="utf-8",
     )
     probe.chmod(0o700)
@@ -264,4 +286,4 @@ def test_cron_runner_loads_deepseek_key_from_zshrc(tmp_path):
     )
 
     assert completed.returncode == 0, completed.stderr
-    assert completed.stdout == "key-loaded\n"
+    assert completed.stdout == "shell-key-not-loaded\n"

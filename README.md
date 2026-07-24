@@ -75,8 +75,8 @@ python -m src.quant.cli --config configs/quant/688008_t0.json backtest --holdout
 
 新增指数动量、舆情语义、区间学习与特征归因、竞价异动联动四因子选股。策略采用“前夜观察名单 +
 次日 9:25 真实竞价确认”的两阶段流程，最多持有 5 只、单行业最多 2 只；没有真实 A 股竞价盘口时
-不会产生自动买入信号。正式全市场调用需配置 `TICKDB_API_KEY`；除进程环境变量和 `.env` 外，客户端
-也会安全读取 `~/.zshrc` 或 `~/zshrc` 中的字面量赋值，但不会执行 shell 配置。
+不会产生自动买入信号。正式全市场调用需在项目 `.env` 配置 `TICKDB_API_KEY`；四因子舆情分析还需
+在同一文件配置 `DEEPSEEK_API_KEY`。量化任务不会从进程环境变量或 Shell 配置读取这两个密钥。
 
 ```bash
 python -m src.quant.tickdb_factor_snapshot --symbols 600519.SH,601318.SH
@@ -89,7 +89,6 @@ python -m src.quant.four_factor_runner \
 分位模型、搜索候选新闻，并使用TickDB复核行情；输出仍需下一交易日9:25真实竞价确认：
 
 ```bash
-source scripts/load_deepseek_env.zsh
 python -m src.quant.four_factor_live --as-of 2026-07-24T20:00:00
 ```
 
@@ -125,8 +124,8 @@ python -m src.quant.etf_momentum \
   --config configs/quant/etf_momentum_5y_daily_proxy.json research
 ```
 
-需在`.env`配置`TUSHARE_TOKEN`和`FEISHU_WEBHOOK_URL`，并提供`TICKDB_API_KEY`（可由客户端安全读取
-`~/.zshrc`中的字面量赋值）。报告保存在`reports/quant/etf_momentum/`，日志位于
+需在`.env`配置`TUSHARE_TOKEN`、`FEISHU_WEBHOOK_URL`和`TICKDB_API_KEY`。报告保存在
+`reports/quant/etf_momentum/`，日志位于
 `logs/quant_etf/weekly.log`。该策略仅用于100万元模拟盘研究，不连接券商，不保证未来收益。
 
 五年报告采用真实前复权日线，严格按“每日收盘重算、下一交易日开盘成交”执行。回测区间
@@ -289,7 +288,7 @@ QUANT_PAPER_MODULE=src.quant.portfolio_paper \
 
 启用 `QUANT_DAILY_REVIEW_MODULE` 后，cron 会在每个工作日 15:25 汇总成交、费用、规则错误和策略内亏损，报告写入 `reports/quant_paper/all_a_chip_portfolio/daily_reviews/`。少于30组配对时只收集样本；达到门槛后仅写入 `optimization_queue.json` 作为候选，任何参数都必须通过滚动验证后人工启用，不会因单日盈亏自动修改。
 
-DeepSeek复盘任务每天20:00读取上述确定性复盘、逐笔成交、拒单、当前持仓和组合权益，生成操作评价并推送飞书；每周五21:00再汇总当周收益、最大回撤、费用、错误操作和策略内亏损，生成周复盘并推送。模型只提出待验证假设，不会直接修改策略参数。DeepSeek密钥从 `~/.zshrc` 的 `DEEPSEEK_API_KEY` 定向读取，飞书Webhook继续从项目 `.env` 加载。
+DeepSeek复盘任务每天20:00读取上述确定性复盘、逐笔成交、拒单、当前持仓和组合权益，生成操作评价并推送飞书；每周五21:00再汇总当周收益、最大回撤、费用、错误操作和策略内亏损，生成周复盘并推送。模型只提出待验证假设，不会直接修改策略参数。`DEEPSEEK_API_KEY`和飞书Webhook都从项目 `.env` 加载。
 
 ```bash
 DEEPSEEK_REVIEW_PYTHON="$(command -v python3)" \
@@ -322,7 +321,7 @@ DAILY_CHIP_SCREEN_PYTHON="$(command -v python3)" \
   ./scripts/install_daily_chip_screen_cron.sh
 ```
 
-完整任务需要配置 `TUSHARE_TOKEN`、`DEEPSEEK_API_KEY`（也可复用 `OPENAI_API_KEY`）和 `FEISHU_WEBHOOK_URL`。项目配置仍从 `.env` 加载；通过上述脚本安装的20:00定时任务还会从 `~/.zshrc` 中安全提取 `DEEPSEEK_API_KEY` 的 `export` 赋值，但不会执行整个 shell 配置，因此可以复用用户级环境变量而无需把密钥复制到项目文件或 cron 文本。DeepSeek 每只输出下一交易日操作结论、触发区间、止损失效条件及止盈减仓条件；报告写入 `reports/quant/daily_chip_screen/` 后再推送，密钥和 Webhook 不会写入报告或日志。同一交易日只成功推送一次，节假日不会重复推送上一交易日结果；飞书失败时会保留指导供重试。该指导仅供模拟盘研究。
+完整任务需要在项目 `.env` 配置 `TUSHARE_TOKEN`、`DEEPSEEK_API_KEY` 和 `FEISHU_WEBHOOK_URL`。定时任务与手动任务使用相同配置，不读取 `OPENAI_API_KEY` 或任何Shell配置。DeepSeek 每只输出下一交易日操作结论、触发区间、止损失效条件及止盈减仓条件；报告写入 `reports/quant/daily_chip_screen/` 后再推送，密钥和 Webhook 不会写入报告或日志。同一交易日只成功推送一次，节假日不会重复推送上一交易日结果；飞书失败时会保留指导供重试。该指导仅供模拟盘研究。
 
 #### 每晚热门板块中军短线筛选
 
@@ -347,8 +346,8 @@ HOT_SECTOR_SCREEN_PYTHON="$(command -v python3)" \
 ```
 
 推送内容包含板块热度、选股理由、观察买入区、高开3%放弃条件、约5%硬止损、6%/10%两档止盈和
-最长5日持有期；板块跌出热度榜即取消计划。DeepSeek密钥由启动脚本从 `~/.zshrc` 定向读取，飞书
-Webhook从 `.env` 读取，成功推送按交易日幂等。2026-07-24真实试跑因市场普跌没有合格行业，系统已
+最长5日持有期；板块跌出热度榜即取消计划。DeepSeek密钥和飞书Webhook均从项目 `.env` 读取，
+成功推送按交易日幂等。2026-07-24真实试跑因市场普跌没有合格行业，系统已
 正确推送空名单和观望结论，没有强行凑票。
 
 筛选过程会在控制台打印数据规模、板块门槛结果、热门板块排名、个股淘汰原因汇总、最终候选排名、
