@@ -36,6 +36,7 @@ from api.v1.schemas.stocks import (
     StockHistoryResponse,
     KLineData,
 )
+from api.v1.schemas.quant import QuantRunRequest
 
 __all__ = [
     # common
@@ -62,4 +63,6 @@ __all__ = [
     "StockQuote",
     "StockHistoryResponse",
     "KLineData",
+    # quant
+    "QuantRunRequest",
 ]

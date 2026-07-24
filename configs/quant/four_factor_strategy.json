@@ -1,0 +1,55 @@
+{
+  "name": "四因子时点选股策略",
+  "benchmark_symbol": "000300.SH",
+  "max_positions": 5,
+  "max_per_industry": 2,
+  "watchlist_size": 20,
+  "rebalance_frequency": "weekly",
+  "holding_days": 5,
+  "factor_weights": {
+    "index_momentum": 0.25,
+    "semantic_sentiment": 0.20,
+    "interval_learning": 0.35,
+    "auction_linkage": 0.20
+  },
+  "interval_learning": {
+    "feature_columns": [
+      "return_5d",
+      "return_20d",
+      "relative_strength_20d",
+      "volatility_20d",
+      "turnover_zscore_20d",
+      "main_net_inflow_ratio",
+      "semantic_sentiment_raw"
+    ],
+    "minimum_training_rows": 120,
+    "transaction_cost": 0.002,
+    "random_state": 42
+  },
+  "gates": {
+    "index_momentum_min": 0.60,
+    "semantic_sentiment_min": 0.45,
+    "negative_event_risk_max": 0.70,
+    "expected_edge_min": 0.01,
+    "q10_min": -0.05,
+    "attribution_confidence_min": 0.35,
+    "auction_gap_min": 0.0,
+    "auction_gap_max": 0.03,
+    "auction_volume_ratio_min": 1.5,
+    "auction_sector_breadth_min": 0.60
+  },
+  "risk": {
+    "initial_cash": 1000000,
+    "target_exposure": 0.60,
+    "single_position_max": 0.12,
+    "single_stock_stop_loss": 0.05,
+    "portfolio_drawdown_stop": 0.12,
+    "take_profit_1": 0.08,
+    "take_profit_2": 0.15
+  },
+  "tickdb": {
+    "base_url": "https://api.tickdb.ai",
+    "api_key_env": "TICKDB_API_KEY",
+    "allow_trial_key": true
+  }
+}

@@ -43,7 +43,7 @@
 | 类型 | 支持 |
 |------|------|
 | AI 模型 | Gemini（免费）、OpenAI 兼容、DeepSeek、通义千问、Claude、Ollama |
-| 行情数据 | AkShare、Tushare、Pytdx、Baostock、YFinance |
+| 行情数据 | AkShare、Tushare、Pytdx、Baostock、YFinance、TickDB |
 | 新闻搜索 | Tavily、SerpAPI、Bocha、Brave |
 
 ### 内置交易纪律
@@ -70,6 +70,78 @@ python -m src.quant.cli --config configs/quant/688008_t0.json backtest --holdout
 ```
 
 缓存写入 `data/quant_cache/`，报告写入 `reports/quant/`。回测结果仅用于研究，不构成投资建议，也不代表未来收益。
+
+### TickDB 四因子选股
+
+新增指数动量、舆情语义、区间学习与特征归因、竞价异动联动四因子选股。策略采用“前夜观察名单 +
+次日 9:25 真实竞价确认”的两阶段流程，最多持有 5 只、单行业最多 2 只；没有真实 A 股竞价盘口时
+不会产生自动买入信号。正式全市场调用需配置 `TICKDB_API_KEY`；除进程环境变量和 `.env` 外，客户端
+也会安全读取 `~/.zshrc` 或 `~/zshrc` 中的字面量赋值，但不会执行 shell 配置。
+
+```bash
+python -m src.quant.tickdb_factor_snapshot --symbols 600519.SH,601318.SH
+python -m src.quant.four_factor_runner \
+  --input-dir data/quant_four_factor/input \
+  --as-of 2026-07-24T20:00:00
+```
+
+已有全A日线/资金流收盘缓存时，可直接运行晚间实时筛选。该命令会构造行业等权指数、训练严格时点
+分位模型、搜索候选新闻，并使用TickDB复核行情；输出仍需下一交易日9:25真实竞价确认：
+
+```bash
+source scripts/load_deepseek_env.zsh
+python -m src.quant.four_factor_live --as-of 2026-07-24T20:00:00
+```
+
+公式、输入字段、风控和 TickDB 能力边界见[四因子策略说明](docs/FOUR_FACTOR_STRATEGY.md)。
+📡 数据由 TickDB.ai 提供
+
+### ETF动量轮动模拟盘
+
+ETF策略从15只宽基、行业、海外、黄金和国债ETF中做周频横截面轮动。每周最后一个交易日收盘后按
+20/60/120/250日
+动量加权，扣除60日波动率和120日回撤惩罚，只保留收盘高于MA120且120日收益为正的ETF。组合最多
+持有3只、每类资产最多1只、单只20%、总仓位最高60%；开盘高于前收3%时不追高。单只固定止损7%，
+从持有期高点回撤6%退出；组合回撤8%降至30%仓位，回撤12%清仓并冷静20个交易日。
+
+历史价格和基金复权因子来自Tushare，交易日历来自TickDB。回测按信号后首个交易日开盘成交，计入
+0.01%佣金、最低5元佣金和0.03%滑点。运行命令会生成权益、成交、信号及Markdown/JSON报告：
+
+```bash
+# 固定区间研究，不推送
+python -m src.quant.etf_momentum \
+  --config configs/quant/etf_momentum_rotation.json research
+
+# 使用滚动最近一年区间，生成下周计划并推送飞书
+python -m src.quant.etf_momentum \
+  --config configs/quant/etf_momentum_rotation.json weekly
+
+# 安装每周日20:00复盘任务
+ETF_MOMENTUM_PYTHON="$(command -v python3)" \
+  ./scripts/install_etf_momentum_cron.sh
+
+# 五年前复权日线每日重算回测
+python -m src.quant.etf_momentum \
+  --config configs/quant/etf_momentum_5y_daily_proxy.json research
+```
+
+需在`.env`配置`TUSHARE_TOKEN`和`FEISHU_WEBHOOK_URL`，并提供`TICKDB_API_KEY`（可由客户端安全读取
+`~/.zshrc`中的字面量赋值）。报告保存在`reports/quant/etf_momentum/`，日志位于
+`logs/quant_etf/weekly.log`。该策略仅用于100万元模拟盘研究，不连接券商，不保证未来收益。
+
+五年报告采用真实前复权日线，严格按“每日收盘重算、下一交易日开盘成交”执行。回测区间
+2021-07-26至2026-07-24，总收益-2.44%、
+年化-0.49%、最大回撤16.60%、费用2.12万元，说明提高全量调仓频率带来的换手成本会破坏原周频优势。
+失败结果保存在`reports/quant/etf_momentum_5y_daily_proxy/`，不会用一年结果替代五年结论。
+同一日频规则在最近一年得到总收益11.76%、最大回撤11.15%，但不能推翻五年长期结果。
+
+改为每周最后一个交易日重算后，五年总收益5.09%、年化1.00%、最大回撤14.06%，成交降至748笔，
+费用降至6927元；相比日频有所改善，但仍未达到长期收益目标。周频完整报告保存在
+`reports/quant/etf_momentum_5y_weekly/`。最近一年周频收益17.83%、最大回撤9.76%，短期结果不能替代
+五年结论。
+
+📡 数据由 TickDB.ai 提供
+
 若 Tushare 分钟接口频率不足，可将 CSV/Parquet 路径填入配置的 `data.local_path`，并把 `data.source` 改为 `local`；文件至少需包含时间、OHLC 和成交量列。
 示例配置默认每次只下载一个 6 个月分块，以适配低频账户并支持断点续跑；可按账户权限调整 `max_chunks_per_run`，设为 `0` 表示单次拉取全部缺失分块。
 
@@ -443,7 +515,14 @@ python main.py
 
 ![img.png](sources/fastapi_server.png)
 
-包含完整的配置管理、任务监控和手动分析功能。
+包含股票分析和独立的量化选股工作台。访问 `/quant` 可以查看最近的筹码双峰、热门板块中军、
+四因子时点选股和ETF动量轮动结果，并完成以下操作：
+
+- 查看因子、买卖条件、风控规则和脱敏后的完整策略参数
+- 手动启动已注册的模拟策略；页面不会接受任意系统命令，也不会连接券商
+- 实时查看数据加载、条件过滤、排序和报告生成日志
+- 统一展示最新选股、买入参考、止损参考、目标仓位和逐股操作说明
+- 策略运行记录与日志保存在 `reports/quant/web_runs/`，服务重启后仍可审计
 
 ### 启动方式
 
@@ -460,7 +539,11 @@ python main.py
    python main.py --webui-only  # 仅启动 Web 界面
    ```
 
-访问 `http://127.0.0.1:8000` 即可使用。
+访问 `http://127.0.0.1:8000` 使用股票分析，访问 `http://127.0.0.1:8000/quant` 使用量化选股工作台。
+
+量化页面后端接口统一位于 `/api/v1/quant`：策略目录使用 `GET /strategies`，手动启动使用
+`POST /runs`，运行状态与日志使用 `GET /runs/{run_id}`。只有后端登记的白名单策略可以启动；
+API返回的策略参数会移除Token、API Key和Webhook等敏感配置。
 
 > 也可以使用 `python main.py --serve` (等效命令)
 

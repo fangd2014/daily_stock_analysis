@@ -1,6 +1,7 @@
 import type React from 'react';
 import {BrowserRouter as Router, Routes, Route, NavLink} from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import QuantPage from './pages/QuantPage';
 import NotFoundPage from './pages/NotFoundPage';
 import './App.css';
 
@@ -20,6 +21,13 @@ const SettingsIcon: React.FC = () => (
     </svg>
 );
 
+const QuantIcon: React.FC<{ active?: boolean }> = ({active}) => (
+    <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M4 18V9m5 9V5m5 13v-7m5 7V3M3 18h18"/>
+    </svg>
+);
+
 type DockItem = {
     key: string;
     label: string;
@@ -33,6 +41,12 @@ const NAV_ITEMS: DockItem[] = [
         label: '首页',
         to: '/',
         icon: HomeIcon,
+    },
+    {
+        key: 'quant',
+        label: '量化选股',
+        to: '/quant',
+        icon: QuantIcon,
     },
 ];
 
@@ -93,6 +107,7 @@ const App: React.FC = () => {
                 <main className="flex-1 dock-safe-area">
                     <Routes>
                         <Route path="/" element={<HomePage/>}/>
+                        <Route path="/quant" element={<QuantPage/>}/>
                         <Route path="*" element={<NotFoundPage/>}/>
                     </Routes>
                 </main>
